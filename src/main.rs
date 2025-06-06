@@ -1,6 +1,9 @@
 use iced::highlighter;
 use iced::keyboard;
-use iced::widget::{self, button, text, text_editor};
+use iced::widget::{
+    self, button, center_x, column, container, horizontal_space, pick_list, row, text, text_editor,
+    toggler, tooltip,
+};
 use iced::{Center, Element, Fill, Font, Task, Theme};
 
 use std::ffi;
@@ -11,13 +14,15 @@ use std::sync::Arc;
 pub fn main() -> iced::Result {
     iced::application(Tsu::new, Tsu::update, Tsu::view)
         .theme(Tsu::theme)
+        .font(include_bytes!("../fonts/icons.ttf").as_slice())
+        .default_font(Font::MONOSPACE)
         .run()
 }
 
 struct Tsu {
     file: Option<PathBuf>,
     content: text_editor::Content,
-    theme: highlighter::None,
+    theme: highlighter::Theme,
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
