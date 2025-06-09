@@ -16,8 +16,11 @@ iced = { version = "0.14.0-dev", default-features = false, features = [
     "image",
     "highlighter",
 ] }
+iced_core = "0.13.2"
 rfd = "0.15.3"
 tokio = {version = "1.45.1", features = ["fs"] }
+tracing = "0.1.41"
+tracing-subscriber = {version = "0.3.19", features = ["env-filter"] }
 
 [patch.crates-io]
 iced = { git = "https://github.com/iced-rs/iced", rev = "aa633f6832c93d81fc829bcd351b369f0aada282" }

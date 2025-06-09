@@ -1,19 +1,37 @@
 use iced::highlighter;
 use iced::keyboard;
 use iced::widget::{
-    self, button, center_x, column, container, horizontal_space, pick_list, row, text, text_editor,
-    toggler, tooltip,
+    self, button, center_x, column, container, horizontal_space, pick_list, row,
+    text, text_editor, tooltip,
 };
 use iced::{Center, Element, Fill, Font, Task, Theme};
 
+use tracing::{debug, info};
+use tracing_subscriber;
+
+use std::env;
 use std::ffi;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub fn main() -> iced::Result {
+    let default_level = "info";
+
+    let user_level = env::args()
+        .nth(1)
+        .unwrap_or_else(|| default_level.to_string());
+
+    let crate_name = env!("CARGO_CRATE_NAME");
+    let filter = tracing_subscriber::EnvFilter::new(format!("{}={}", crate_name, user_level));
+
+    tracing_subscriber::fmt::fmt()
+        .with_env_filter(filter)
+        .init();
+    info!("Starting iced application");
     iced::application(Tsu::new, Tsu::update, Tsu::view)
         .theme(Tsu::theme)
+        .title(Tsu::title)
         .font(include_bytes!("../fonts/icons.ttf").as_slice())
         .default_font(Font::MONOSPACE)
         .run()
@@ -26,18 +44,19 @@ struct Tsu {
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
+    command_palette_open: bool,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     ActionPerformed(text_editor::Action),
     ThemeSelected(highlighter::Theme),
-    WordWrapToggled(bool),
     NewFile,
     OpenFile,
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
+    Noop,
 }
 
 impl Tsu {
@@ -50,6 +69,7 @@ impl Tsu {
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
+                command_palette_open: false,
             },
             Task::batch([
                 Task::perform(
@@ -59,6 +79,10 @@ impl Tsu {
                 widget::focus_next(),
             ]),
         )
+    }
+
+    fn title(&self) -> String {
+        String::from("tsu")
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -72,11 +96,6 @@ impl Tsu {
             }
             Message::ThemeSelected(theme) => {
                 self.theme = theme;
-
-                Task::none()
-            }
-            Message::WordWrapToggled(word_wrap) => {
-                self.word_wrap = word_wrap;
 
                 Task::none()
             }
@@ -135,6 +154,7 @@ impl Tsu {
 
                 Task::none()
             }
+            Message::Noop => Task::none(),
         }
     }
 
@@ -152,9 +172,6 @@ impl Tsu {
                 self.is_dirty.then_some(Message::SaveFile)
             ),
             horizontal_space(),
-            toggler(self.word_wrap)
-                .label("Word Wrap")
-                .on_toggle(Message::WordWrapToggled),
             pick_list(
                 highlighter::Theme::ALL,
                 Some(self.theme),
@@ -187,7 +204,7 @@ impl Tsu {
         ]
         .spacing(10);
 
-        column![
+        let base = column![
             controls,
             text_editor(&self.content)
                 .height(Fill)
@@ -207,8 +224,19 @@ impl Tsu {
                 )
                 .key_binding(|key_press| {
                     match key_press.key.as_ref() {
-                        keyboard::Key::Character("s") if key_press.modifiers.command() => {
+                        keyboard::Key::Character("s") if key_press.modifiers.control() => {
+                            debug!("CTRL + S pressed");
                             Some(text_editor::Binding::Custom(Message::SaveFile))
+                        }
+                        keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                            debug!("ESC pressed");
+                            Some(text_editor::Binding::Unfocus)
+                        }
+                        keyboard::Key::Character("p")
+                            if key_press.modifiers.shift() && key_press.modifiers.control() =>
+                        {
+                            debug!("CTRL + SHIFT + P pressed");
+                            Some(text_editor::Binding::Custom(Message::Noop))
                         }
                         _ => text_editor::Binding::from_key_press(key_press),
                     }
@@ -216,8 +244,17 @@ impl Tsu {
             status,
         ]
         .spacing(10)
-        .padding(10)
-        .into()
+        .padding(10);
+
+        if self.command_palette_open {
+            // let oly = column![Text::new("Command Palette").size(20),]
+            //     .spacing(10)
+            //     .padding(20)
+            //     .max_width(400);
+            base.into()
+        } else {
+            base.into()
+        }
     }
 
     fn theme(&self) -> Theme {
