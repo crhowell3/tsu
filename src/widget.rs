@@ -2,6 +2,7 @@
 use iced::advanced::text;
 
 pub use self::modal::modal;
+use iced::Theme;
 
 pub mod modal;
 

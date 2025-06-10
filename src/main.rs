@@ -4,8 +4,8 @@ mod widget;
 use iced::highlighter;
 use iced::keyboard;
 use iced::widget::{
-    self, button, center_x, column, container, horizontal_space, pick_list, row, text, text_editor,
-    tooltip,
+    self as iced_widget, button, center_x, column, container, horizontal_space, pick_list, row,
+    text, text_editor, tooltip,
 };
 use iced::{Center, Element, Fill, Font, Task, Theme};
 
@@ -79,7 +79,7 @@ impl Tsu {
                     load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
                     Message::FileOpened,
                 ),
-                widget::focus_next(),
+                iced_widget::focus_next(),
             ]),
         )
     }
