@@ -1,3 +1,5 @@
+mod modal;
+
 use iced::highlighter;
 use iced::keyboard;
 use iced::widget::{
@@ -15,7 +17,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub fn main() -> iced::Result {
+use self::modal::{Modal, ModalMessage, command_palette::CommandPalette};
+
+pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let default_level = "info";
 
     let user_level = env::args()
@@ -28,7 +32,7 @@ pub fn main() -> iced::Result {
     tracing_subscriber::fmt::fmt()
         .with_env_filter(filter)
         .init();
-    info!("Starting iced application");
+    info!("Starting tsu GUI...");
     iced::application(Tsu::new, Tsu::update, Tsu::view)
         .theme(Tsu::theme)
         .title(Tsu::title)
@@ -44,7 +48,7 @@ struct Tsu {
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
-    command_palette_open: bool,
+    modal: Option<Box<dyn Modal>>,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +60,7 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
+    Modal(modal::ModalMessage),
     Noop,
 }
 
@@ -69,7 +74,7 @@ impl Tsu {
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
-                command_palette_open: false,
+                modal: None,
             },
             Task::batch([
                 Task::perform(
@@ -154,6 +159,10 @@ impl Tsu {
 
                 Task::none()
             }
+            Message::Modal(ModalMessage::Close) => {
+                self.modal = None;
+                Task::none()
+            }
             Message::Noop => Task::none(),
         }
     }
@@ -236,6 +245,7 @@ impl Tsu {
                             if key_press.modifiers.shift() && key_press.modifiers.control() =>
                         {
                             debug!("CTRL + SHIFT + P pressed");
+                            self.modal = Some(Box::new(CommandPalette::new()));
                             Some(text_editor::Binding::Custom(Message::Noop))
                         }
                         _ => text_editor::Binding::from_key_press(key_press),
@@ -246,15 +256,8 @@ impl Tsu {
         .spacing(10)
         .padding(10);
 
-        if self.command_palette_open {
-            // let oly = column![Text::new("Command Palette").size(20),]
-            //     .spacing(10)
-            //     .padding(20)
-            //     .max_width(400);
-            base.into()
-        } else {
-            base.into()
-        }
+        base.into()
+
     }
 
     fn theme(&self) -> Theme {

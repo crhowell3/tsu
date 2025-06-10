@@ -42,7 +42,26 @@
 
 ## 💭 About
 
-text editor for linux
+gui-based text editor for linux.
+
+## 📕 Documentation
+
+The documentation for the latest version of the terebinth compiler can be
+found [here](https://docs.rs/terebinth/). All previously published versions
+can be found on [crates.io](https://crates.io/crates/terebinth/versions),
+and each version's respective documentation is accessible from there as well.
+
+## 🔰 Getting Started
+
+### Installation
+
+The tsu text editor can be installed from source:
+
+```shell
+git clone https://github.com/crhowell3/tsu.git
+cd tsu
+cargo install --path . --release
+```
 
 <p align="center">
   Copyright &copy; 2025-present
