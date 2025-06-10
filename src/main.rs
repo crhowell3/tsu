@@ -1,5 +1,3 @@
-mod modal;
-
 use iced::highlighter;
 use iced::keyboard;
 use iced::widget::{
@@ -17,9 +15,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use self::modal::{Modal, ModalMessage, command_palette::CommandPalette};
-
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub fn main() -> iced::Result {
     let default_level = "info";
 
     let user_level = env::args()
@@ -48,7 +44,6 @@ struct Tsu {
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
-    modal: Option<Box<dyn Modal>>,
 }
 
 #[derive(Debug, Clone)]
@@ -60,7 +55,6 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
-    Modal(modal::ModalMessage),
     Noop,
 }
 
@@ -74,7 +68,6 @@ impl Tsu {
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
-                modal: None,
             },
             Task::batch([
                 Task::perform(
@@ -159,10 +152,6 @@ impl Tsu {
 
                 Task::none()
             }
-            Message::Modal(ModalMessage::Close) => {
-                self.modal = None;
-                Task::none()
-            }
             Message::Noop => Task::none(),
         }
     }
@@ -245,7 +234,6 @@ impl Tsu {
                             if key_press.modifiers.shift() && key_press.modifiers.control() =>
                         {
                             debug!("CTRL + SHIFT + P pressed");
-                            self.modal = Some(Box::new(CommandPalette::new()));
                             Some(text_editor::Binding::Custom(Message::Noop))
                         }
                         _ => text_editor::Binding::from_key_press(key_press),
