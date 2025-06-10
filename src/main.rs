@@ -1,8 +1,11 @@
+mod modal;
+mod widget;
+
 use iced::highlighter;
 use iced::keyboard;
 use iced::widget::{
-    self, button, center_x, column, container, horizontal_space, pick_list, row,
-    text, text_editor, tooltip,
+    self, button, center_x, column, container, horizontal_space, pick_list, row, text, text_editor,
+    tooltip,
 };
 use iced::{Center, Element, Fill, Font, Task, Theme};
 
@@ -14,6 +17,8 @@ use std::ffi;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use self::modal::Modal;
 
 pub fn main() -> iced::Result {
     let default_level = "info";
@@ -245,7 +250,6 @@ impl Tsu {
         .padding(10);
 
         base.into()
-
     }
 
     fn theme(&self) -> Theme {
