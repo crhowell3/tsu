@@ -1,6 +1,3 @@
-#[allow(dead_code)]
-use iced::advanced::text;
-
 pub use self::modal::modal;
 use iced::Theme;
 

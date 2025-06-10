@@ -49,6 +49,7 @@ struct Tsu {
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
+    modal: Option<Modal>,
 }
 
 #[derive(Debug, Clone)]
@@ -60,6 +61,8 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
+    Modal(modal::Message),
+    OpenedCommandPalette,
     Noop,
 }
 
@@ -73,6 +76,7 @@ impl Tsu {
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
+                modal: None,
             },
             Task::batch([
                 Task::perform(
@@ -157,6 +161,27 @@ impl Tsu {
 
                 Task::none()
             }
+            Message::Modal(message) => {
+                let Some(modal) = &mut self.modal else {
+                    return Task::none();
+                };
+
+                let (command, event) = modal.update(message);
+
+                if let Some(event) = event {
+                    match event {
+                        modal::Event::CloseModal => {
+                            self.modal = None;
+                        }
+                    }
+                }
+
+                command.map(Message::Modal)
+            }
+            Message::OpenedCommandPalette => {
+                self.modal = Some(Modal::CommandPalette);
+                Task::none()
+            }
             Message::Noop => Task::none(),
         }
     }
@@ -239,7 +264,7 @@ impl Tsu {
                             if key_press.modifiers.shift() && key_press.modifiers.control() =>
                         {
                             debug!("CTRL + SHIFT + P pressed");
-                            Some(text_editor::Binding::Custom(Message::Noop))
+                            Some(text_editor::Binding::Custom(Message::OpenedCommandPalette))
                         }
                         _ => text_editor::Binding::from_key_press(key_press),
                     }
@@ -249,7 +274,12 @@ impl Tsu {
         .spacing(10)
         .padding(10);
 
-        base.into()
+        match &self.modal {
+            Some(modal) => widget::modal(base, modal.view().map(Message::Modal), || {
+                Message::Modal(modal::Message::Cancel)
+            }),
+            _ => base.into(),
+        }
     }
 
     fn theme(&self) -> Theme {
