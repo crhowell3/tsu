@@ -74,7 +74,6 @@ enum Message {
     FileSaved(Result<PathBuf, Error>),
     Modal(modal::Message),
     OpenedCommandPalette,
-    Noop,
 }
 
 impl Tsu {
@@ -190,7 +189,6 @@ impl Tsu {
                 self.modal = Some(Modal::CommandPalette);
                 Task::none()
             }
-            Message::Noop => Task::none(),
         }
     }
 
