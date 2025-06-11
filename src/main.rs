@@ -10,7 +10,6 @@ use iced::widget::{
 use iced::{Center, Element, Fill, Font, Task, Theme};
 
 use tracing::{debug, info};
-use tracing_subscriber;
 
 use std::env;
 use std::ffi;
@@ -39,7 +38,7 @@ pub fn main() -> iced::Result {
     let filename = args.file;
 
     let crate_name = env!("CARGO_CRATE_NAME");
-    let filter = tracing_subscriber::EnvFilter::new(format!("{}={}", crate_name, user_level));
+    let filter = tracing_subscriber::EnvFilter::new(format!("{crate_name}={user_level}"));
 
     tracing_subscriber::fmt::fmt()
         .with_env_filter(filter)
@@ -89,7 +88,7 @@ impl Tsu {
                 modal: None,
             },
             Task::batch([
-                Task::perform(load_file(format!("{}", filename)), Message::FileOpened),
+                Task::perform(load_file(filename), Message::FileOpened),
                 iced_widget::focus_next(),
             ]),
         )
@@ -173,7 +172,7 @@ impl Tsu {
                     return Task::none();
                 };
 
-                let (command, event) = modal.update(message);
+                let (command, event) = modal.update(&message);
 
                 if let Some(event) = event {
                     match event {

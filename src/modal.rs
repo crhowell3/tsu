@@ -19,7 +19,7 @@ pub enum Event {
 }
 
 impl Modal {
-    pub fn update(&mut self, message: Message) -> (Task<Message>, Option<Event>) {
+    pub fn update(&mut self, message: &Message) -> (Task<Message>, Option<Event>) {
         match message {
             Message::Cancel => (Task::none(), Some(Event::CloseModal)),
         }
