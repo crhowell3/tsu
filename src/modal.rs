@@ -19,13 +19,13 @@ pub enum Event {
 }
 
 impl Modal {
-    pub fn update(&mut self, message: Message) -> (Task<Message>, Option<Event>) {
+    pub fn update(&mut self, message: &Message) -> (Task<Message>, Option<Event>) {
         match message {
             Message::Cancel => (Task::none(), Some(Event::CloseModal)),
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         match self {
             Modal::CommandPalette => command_palette::view(),
         }

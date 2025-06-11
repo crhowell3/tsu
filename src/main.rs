@@ -10,7 +10,6 @@ use iced::widget::{
 use iced::{Center, Element, Fill, Font, Task, Theme};
 
 use tracing::{debug, info};
-use tracing_subscriber;
 
 use std::env;
 use std::ffi;
@@ -18,23 +17,50 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use clap::Parser;
+
 use self::modal::Modal;
 
-pub fn main() -> iced::Result {
-    let default_level = "info";
+#[derive(Parser, Debug)]
+#[clap(name = "tsu")]
+#[command(
+    version,
+    about,
+    author = "Cameron Howell <me@crhowell.com>",
+    display_name = "tsu text editor",
+    help_template = "{name} {version}
+{author-with-newline}{about-with-newline}
+{usage-heading} {usage}
 
-    let user_level = env::args()
-        .nth(1)
-        .unwrap_or_else(|| default_level.to_string());
+{all-args}{after-help}
+"
+)]
+struct Args {
+    /// Log level
+    #[arg(short, action = clap::ArgAction::Count, help="Increases logging verbosity (-v, -vv, -vvv)")]
+    verbose: u8,
+    /// File to open
+    file: String,
+}
+
+pub fn main() -> iced::Result {
+    let args = Args::parse();
+    let user_level = match args.verbose {
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
+        _ => "trace",
+    };
+    let filename = args.file;
 
     let crate_name = env!("CARGO_CRATE_NAME");
-    let filter = tracing_subscriber::EnvFilter::new(format!("{}={}", crate_name, user_level));
+    let filter = tracing_subscriber::EnvFilter::new(format!("{crate_name}={user_level}"));
 
     tracing_subscriber::fmt::fmt()
         .with_env_filter(filter)
         .init();
     info!("Starting tsu GUI...");
-    iced::application(Tsu::new, Tsu::update, Tsu::view)
+    iced::application(move || Tsu::new(filename.clone()), Tsu::update, Tsu::view)
         .theme(Tsu::theme)
         .title(Tsu::title)
         .font(include_bytes!("../fonts/icons.ttf").as_slice())
@@ -63,11 +89,10 @@ enum Message {
     FileSaved(Result<PathBuf, Error>),
     Modal(modal::Message),
     OpenedCommandPalette,
-    Noop,
 }
 
 impl Tsu {
-    fn new() -> (Self, Task<Message>) {
+    fn new(filename: String) -> (Self, Task<Message>) {
         (
             Self {
                 file: None,
@@ -79,10 +104,7 @@ impl Tsu {
                 modal: None,
             },
             Task::batch([
-                Task::perform(
-                    load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
-                    Message::FileOpened,
-                ),
+                Task::perform(load_file(filename), Message::FileOpened),
                 iced_widget::focus_next(),
             ]),
         )
@@ -166,7 +188,7 @@ impl Tsu {
                     return Task::none();
                 };
 
-                let (command, event) = modal.update(message);
+                let (command, event) = modal.update(&message);
 
                 if let Some(event) = event {
                     match event {
@@ -182,11 +204,10 @@ impl Tsu {
                 self.modal = Some(Modal::CommandPalette);
                 Task::none()
             }
-            Message::Noop => Task::none(),
         }
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         let controls = row![
             action(new_icon(), "New file", Some(Message::NewFile)),
             action(
