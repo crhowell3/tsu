@@ -46,10 +46,7 @@ gui-based text editor for linux.
 
 ## 📕 Documentation
 
-The documentation for the latest version of the terebinth compiler can be
-found [here](https://docs.rs/terebinth/). All previously published versions
-can be found on [crates.io](https://crates.io/crates/terebinth/versions),
-and each version's respective documentation is accessible from there as well.
+Coming soon
 
 ## 🔰 Getting Started
 
