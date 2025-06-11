@@ -23,7 +23,11 @@ use self::modal::Modal;
 
 #[derive(Parser, Debug)]
 #[clap(name = "tsu")]
-#[command(version, about)]
+#[command(
+    version,
+    about,
+    long_about = "tsu editor\nCameron Howell <me@crhowell.com>"
+)]
 struct Args {
     /// Log level
     #[arg(short, long, default_value = "info")]
