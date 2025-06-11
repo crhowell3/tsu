@@ -1,7 +1,10 @@
+mod modal;
+mod widget;
+
 use iced::highlighter;
 use iced::keyboard;
 use iced::widget::{
-    self, button, center_x, column, container, horizontal_space, pick_list, row,
+    self as iced_widget, button, center_x, column, container, horizontal_space, pick_list, row,
     text, text_editor, tooltip,
 };
 use iced::{Center, Element, Fill, Font, Task, Theme};
@@ -14,6 +17,8 @@ use std::ffi;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use self::modal::Modal;
 
 pub fn main() -> iced::Result {
     let default_level = "info";
@@ -28,7 +33,7 @@ pub fn main() -> iced::Result {
     tracing_subscriber::fmt::fmt()
         .with_env_filter(filter)
         .init();
-    info!("Starting iced application");
+    info!("Starting tsu GUI...");
     iced::application(Tsu::new, Tsu::update, Tsu::view)
         .theme(Tsu::theme)
         .title(Tsu::title)
@@ -44,7 +49,7 @@ struct Tsu {
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
-    command_palette_open: bool,
+    modal: Option<Modal>,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +61,8 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
+    Modal(modal::Message),
+    OpenedCommandPalette,
     Noop,
 }
 
@@ -69,14 +76,14 @@ impl Tsu {
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
-                command_palette_open: false,
+                modal: None,
             },
             Task::batch([
                 Task::perform(
                     load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
                     Message::FileOpened,
                 ),
-                widget::focus_next(),
+                iced_widget::focus_next(),
             ]),
         )
     }
@@ -152,6 +159,27 @@ impl Tsu {
                     self.is_dirty = false;
                 }
 
+                Task::none()
+            }
+            Message::Modal(message) => {
+                let Some(modal) = &mut self.modal else {
+                    return Task::none();
+                };
+
+                let (command, event) = modal.update(message);
+
+                if let Some(event) = event {
+                    match event {
+                        modal::Event::CloseModal => {
+                            self.modal = None;
+                        }
+                    }
+                }
+
+                command.map(Message::Modal)
+            }
+            Message::OpenedCommandPalette => {
+                self.modal = Some(Modal::CommandPalette);
                 Task::none()
             }
             Message::Noop => Task::none(),
@@ -236,7 +264,7 @@ impl Tsu {
                             if key_press.modifiers.shift() && key_press.modifiers.control() =>
                         {
                             debug!("CTRL + SHIFT + P pressed");
-                            Some(text_editor::Binding::Custom(Message::Noop))
+                            Some(text_editor::Binding::Custom(Message::OpenedCommandPalette))
                         }
                         _ => text_editor::Binding::from_key_press(key_press),
                     }
@@ -246,14 +274,11 @@ impl Tsu {
         .spacing(10)
         .padding(10);
 
-        if self.command_palette_open {
-            // let oly = column![Text::new("Command Palette").size(20),]
-            //     .spacing(10)
-            //     .padding(20)
-            //     .max_width(400);
-            base.into()
-        } else {
-            base.into()
+        match &self.modal {
+            Some(modal) => widget::modal(base, modal.view().map(Message::Modal), || {
+                Message::Modal(modal::Message::Cancel)
+            }),
+            _ => base.into(),
         }
     }
 
