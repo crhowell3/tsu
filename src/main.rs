@@ -26,19 +26,31 @@ use self::modal::Modal;
 #[command(
     version,
     about,
-    long_about = "tsu editor\nCameron Howell <me@crhowell.com>"
+    author = "Cameron Howell <me@crhowell.com>",
+    display_name = "tsu text editor",
+    help_template = "{name} {version}
+{author-with-newline}{about-with-newline}
+{usage-heading} {usage}
+
+{all-args}{after-help}
+"
 )]
 struct Args {
     /// Log level
-    #[arg(short, long, default_value = "info")]
-    loglevel: String,
+    #[arg(short, action = clap::ArgAction::Count, help="Increases logging verbosity (-v, -vv, -vvv)")]
+    verbose: u8,
     /// File to open
     file: String,
 }
 
 pub fn main() -> iced::Result {
     let args = Args::parse();
-    let user_level = args.loglevel;
+    let user_level = match args.verbose {
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
+        _ => "trace",
+    };
     let filename = args.file;
 
     let crate_name = env!("CARGO_CRATE_NAME");
