@@ -18,14 +18,25 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use clap::Parser;
+
 use self::modal::Modal;
 
-pub fn main() -> iced::Result {
-    let default_level = "info";
+#[derive(Parser, Debug)]
+#[clap(name = "tsu")]
+#[command(version, about)]
+struct Args {
+    /// Log level
+    #[arg(short, long, default_value = "info")]
+    loglevel: String,
+    /// File to open
+    file: String,
+}
 
-    let user_level = env::args()
-        .nth(1)
-        .unwrap_or_else(|| default_level.to_string());
+pub fn main() -> iced::Result {
+    let args = Args::parse();
+    let user_level = args.loglevel;
+    let filename = args.file;
 
     let crate_name = env!("CARGO_CRATE_NAME");
     let filter = tracing_subscriber::EnvFilter::new(format!("{}={}", crate_name, user_level));
@@ -34,7 +45,7 @@ pub fn main() -> iced::Result {
         .with_env_filter(filter)
         .init();
     info!("Starting tsu GUI...");
-    iced::application(Tsu::new, Tsu::update, Tsu::view)
+    iced::application(move || Tsu::new(filename.clone()), Tsu::update, Tsu::view)
         .theme(Tsu::theme)
         .title(Tsu::title)
         .font(include_bytes!("../fonts/icons.ttf").as_slice())
@@ -67,7 +78,7 @@ enum Message {
 }
 
 impl Tsu {
-    fn new() -> (Self, Task<Message>) {
+    fn new(filename: String) -> (Self, Task<Message>) {
         (
             Self {
                 file: None,
@@ -79,10 +90,7 @@ impl Tsu {
                 modal: None,
             },
             Task::batch([
-                Task::perform(
-                    load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
-                    Message::FileOpened,
-                ),
+                Task::perform(load_file(format!("{}", filename)), Message::FileOpened),
                 iced_widget::focus_next(),
             ]),
         )
