@@ -25,7 +25,7 @@ impl Modal {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         match self {
             Modal::CommandPalette => command_palette::view(),
         }
