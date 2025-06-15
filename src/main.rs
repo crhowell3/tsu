@@ -87,7 +87,7 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
-    Modal(modal::Message),
+    Modal(modal::ModalMessage),
     OpenedCommandPalette,
 }
 
@@ -201,7 +201,9 @@ impl Tsu {
                 command.map(Message::Modal)
             }
             Message::OpenedCommandPalette => {
-                self.modal = Some(Modal::CommandPalette);
+                self.modal = Some(Modal::CommandPalette(modal::command_palette::State::new(
+                    vec!["Something".into()],
+                )));
                 Task::none()
             }
         }
@@ -295,9 +297,11 @@ impl Tsu {
         .spacing(10)
         .padding(10);
 
-        match &self.modal {
+        let modal = &self.modal;
+
+        match modal {
             Some(modal) => widget::modal(base, modal.view().map(Message::Modal), || {
-                Message::Modal(modal::Message::Cancel)
+                Message::Modal(modal::ModalMessage::Cancel)
             }),
             _ => base.into(),
         }

@@ -1,0 +1,25 @@
+[package]
+name = "data"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[features]
+dev = []
+
+[dependencies]
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "fs"] }
+itertools = { workspace = true }
+palette = { workspace = true }
+
+iced_core = "0.14.0-dev"
+toml = "0.8.11"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive", "rc"]
+
+[lints]
+workspace = true
