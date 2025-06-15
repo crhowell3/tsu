@@ -1,14 +1,35 @@
 [package]
 name = "tsu"
-version = "0.1.0"
-authors = ["Cameron Howell <jango.djarin@proton.me>"]
-edition = "2024"
 publish = false
 readme = "README.md"
 repository = "https://github.com/crhowell3/tsu"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[workspace]
+members = ["data"]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Cameron Howell <jango.djarin@proton.me>"]
 license = "GPL-3.0"
+edition = "2024"
+
+[workspace.dependencies]
+tokio = { version = "1.45.1" }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19" }
+thiserror = "2.0.12"
+itertools = "0.14.0"
+palette = "0.7.4"
 
 [dependencies]
+tokio = { workspace = true, features = ["fs"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
 clap = { version = "4.5.32", features = ["derive"] }
 iced = { version = "0.14.0-dev", default-features = false, features = [
     "wgpu",
@@ -22,10 +43,12 @@ iced = { version = "0.14.0-dev", default-features = false, features = [
 ] }
 iced_core = "0.13.2"
 rfd = "0.15.3"
-tokio = {version = "1.45.1", features = ["fs"] }
-tracing = "0.1.41"
-tracing-subscriber = {version = "0.3.19", features = ["env-filter"] }
+
+data = { version = "0.1.0", path = "data" }
 
 [patch.crates-io]
 iced = { git = "https://github.com/iced-rs/iced", rev = "aa633f6832c93d81fc829bcd351b369f0aada282" }
 iced_core = { git = "https://github.com/iced-rs/iced", rev = "aa633f6832c93d81fc829bcd351b369f0aada282" }
+
+[workspace.lints.clippy]
+default_trait_access = "deny"

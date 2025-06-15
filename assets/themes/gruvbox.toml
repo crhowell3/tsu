@@ -1,0 +1,24 @@
+[general]
+background = "#2b292d"
+horizontal_rule = "#323034"
+unread_indicator = "#ffa07a"
+border = "#4f474d"
+
+[text]
+primary = "#fecdb2"
+secondary = "#AB8A79"
+tertiary = "#d7bde2"
+success = "#b1b695"
+error = "#e06b75"
+
+[buttons.primary]
+background = "#2b292d"
+background_hover = "#242226"
+background_selected = "#1d1b1e"
+background_selected_hover = "#0D0C0D"
+
+[buttons.secondary]
+background = "#323034"
+background_hover = "#3e3c41"
+background_selected = "#606155"
+background_selected_hover = "#6F7160"

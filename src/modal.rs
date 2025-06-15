@@ -6,11 +6,12 @@ pub mod command_palette;
 
 #[derive(Debug)]
 pub enum Modal {
-    CommandPalette,
+    CommandPalette(command_palette::State),
 }
 
 #[derive(Debug, Clone)]
-pub enum Message {
+pub enum ModalMessage {
+    CommandPalette(command_palette::Message),
     Cancel,
 }
 
@@ -19,15 +20,22 @@ pub enum Event {
 }
 
 impl Modal {
-    pub fn update(&mut self, message: &Message) -> (Task<Message>, Option<Event>) {
-        match message {
-            Message::Cancel => (Task::none(), Some(Event::CloseModal)),
+    pub fn update(&mut self, message: &ModalMessage) -> (Task<ModalMessage>, Option<Event>) {
+        match (self, message) {
+            (_, ModalMessage::Cancel) => (Task::none(), Some(Event::CloseModal)),
+
+            (Modal::CommandPalette(state), ModalMessage::CommandPalette(msg)) => {
+                let (task, event) = state.update(msg);
+                (task.map(ModalMessage::CommandPalette), event)
+            }
+
+            _ => (Task::none(), None),
         }
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, ModalMessage> {
         match self {
-            Modal::CommandPalette => command_palette::view(),
+            Modal::CommandPalette(state) => state.view().map(ModalMessage::CommandPalette),
         }
     }
 }
