@@ -61,12 +61,13 @@ pub fn main() -> iced::Result {
         .with_env_filter(filter)
         .init();
     info!("Starting tsu GUI...");
-    iced::application(move || Tsu::new(filename.clone()), Tsu::update, Tsu::view)
-        .theme(Tsu::theme)
+    iced::daemon(move || Tsu::new(filename.clone()), Tsu::update, Tsu::view)
         .title(Tsu::title)
-        .font(include_bytes!("../fonts/icons.ttf").as_slice())
-        .default_font(Font::MONOSPACE)
+        .theme(Tsu::theme)
         .run()
+        .inspect_err(|err| {})?;
+
+    Ok(())
 }
 
 struct Tsu {
