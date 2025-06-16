@@ -1,21 +1,22 @@
+mod appearance;
 mod modal;
 mod widget;
 
-use iced::highlighter;
 use iced::keyboard;
 use iced::widget::{
-    self as iced_widget, button, center_x, column, container, horizontal_space, pick_list, row,
-    text, text_editor, tooltip,
+    self as iced_widget, button, center_x, column, container, horizontal_space, row, text,
+    text_editor, tooltip,
 };
-use iced::{Center, Element, Fill, Font, Task, Theme};
+use iced::{Center, Element, Fill, Font, Task};
 
 use tracing::{debug, info};
 
 use std::env;
-use std::ffi;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use appearance::{Theme, theme};
 
 use clap::Parser;
 
@@ -71,7 +72,7 @@ pub fn main() -> iced::Result {
 struct Tsu {
     file: Option<PathBuf>,
     content: text_editor::Content,
-    theme: highlighter::Theme,
+    theme: Theme,
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
@@ -81,7 +82,7 @@ struct Tsu {
 #[derive(Debug, Clone)]
 enum Message {
     ActionPerformed(text_editor::Action),
-    ThemeSelected(highlighter::Theme),
+    ThemeSelected(Theme),
     NewFile,
     OpenFile,
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
@@ -97,7 +98,7 @@ impl Tsu {
             Self {
                 file: None,
                 content: text_editor::Content::new(),
-                theme: highlighter::Theme::SolarizedDark,
+                theme: Theme::default(),
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
@@ -223,13 +224,6 @@ impl Tsu {
                 self.is_dirty.then_some(Message::SaveFile)
             ),
             horizontal_space(),
-            pick_list(
-                highlighter::Theme::ALL,
-                Some(self.theme),
-                Message::ThemeSelected
-            )
-            .text_size(14)
-            .padding([5, 10])
         ]
         .spacing(10)
         .align_y(Center);
@@ -265,14 +259,6 @@ impl Tsu {
                 } else {
                     text::Wrapping::None
                 })
-                .highlight(
-                    self.file
-                        .as_deref()
-                        .and_then(Path::extension)
-                        .and_then(ffi::OsStr::to_str)
-                        .unwrap_or("rs"),
-                    self.theme,
-                )
                 .key_binding(|key_press| {
                     match key_press.key.as_ref() {
                         keyboard::Key::Character("s") if key_press.modifiers.control() => {
@@ -308,11 +294,7 @@ impl Tsu {
     }
 
     fn theme(&self) -> Theme {
-        if self.theme.is_dark() {
-            Theme::Dark
-        } else {
-            Theme::Light
-        }
+        self.theme.clone()
     }
 }
 

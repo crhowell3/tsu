@@ -1,9 +1,9 @@
 use iced::{
-    Length, Task, theme,
+    Length, Task,
     widget::{Button, Scrollable, column, container, scrollable, text, text_input},
 };
 
-use crate::widget::Element;
+use crate::{theme, widget::Element};
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -73,6 +73,7 @@ impl State {
             .padding(20)
             .width(Length::Shrink)
             .height(Length::Shrink)
+            .style(theme::container::general)
             .into()
     }
 }

@@ -46,6 +46,8 @@ rfd = "0.15.3"
 
 data = { version = "0.1.0", path = "data" }
 
+dark-light = { git = "https://github.com/rust-dark-light/dark-light", rev = "8e1f745f91e1e805fa772a83e4744afe95d70aa1" }
+
 [patch.crates-io]
 iced = { git = "https://github.com/iced-rs/iced", rev = "aa633f6832c93d81fc829bcd351b369f0aada282" }
 iced_core = { git = "https://github.com/iced-rs/iced", rev = "aa633f6832c93d81fc829bcd351b369f0aada282" }

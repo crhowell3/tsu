@@ -15,6 +15,13 @@ impl Catalog for Theme {
     }
 }
 
+pub fn none(_theme: &Theme) -> Style {
+    Style {
+        background: None,
+        ..Default::default()
+    }
+}
+
 pub fn general(theme: &Theme) -> Style {
     Style {
         background: Some(Background::Color(theme.colors().general.background)),

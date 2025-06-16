@@ -9,7 +9,7 @@ pub const ICON_SIZE: f32 = 12.0;
 
 #[derive(Debug, Clone)]
 pub enum Theme {
-    Selected(),
+    Selected(data::Theme),
     Preview {
         selected: data::Theme,
         preview: data::Theme,
@@ -54,7 +54,7 @@ impl Default for Theme {
     }
 }
 
-impl iced::theme::Theme for Theme {
+impl iced::theme::Base for Theme {
     fn base(&self) -> iced::theme::Style {
         iced::theme::Style {
             background_color: self.colors().general.background,
@@ -66,5 +66,3 @@ impl iced::theme::Theme for Theme {
         None
     }
 }
-
-impl combo_box::Catalog for Theme {}
