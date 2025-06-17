@@ -1,4 +1,5 @@
 mod appearance;
+mod event;
 mod modal;
 mod widget;
 mod window;
@@ -17,7 +18,9 @@ use iced::widget::{
 };
 use iced::{Center, Fill, Font, Subscription, Task};
 use tracing::{debug, error, info};
+use tokio::runtime;
 
+use self::event::{Event, events};
 use self::modal::Modal;
 use self::widget::Element;
 use self::window::Window;
@@ -44,7 +47,7 @@ struct Args {
     file: String,
 }
 
-pub fn main() -> iced::Result {
+pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let user_level = match args.verbose {
         0 => "warn",
@@ -60,14 +63,29 @@ pub fn main() -> iced::Result {
     tracing_subscriber::fmt::fmt()
         .with_env_filter(filter)
         .init();
+
+    let window_load = {
+        let rt = runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+
+        rt.block_on(async {
+            let window = data::Window::load().await;
+
+            window
+        })
+    };
+    
     info!("Starting tsu GUI...");
-    iced::daemon(move || Tsu::new(filename.clone()), Tsu::update, Tsu::view)
+    iced::daemon(move || Tsu::new(filename.clone(), window_load.clone()), Tsu::update, Tsu::view)
         .title(Tsu::title)
         .theme(Tsu::theme)
         .subscription(Tsu::subscription)
         .run()
         .inspect_err(|err| error!("{err}"))?;
 
+    info!("tsu GUI active");
+    
     Ok(())
 }
 
@@ -79,12 +97,15 @@ struct Tsu {
     is_loading: bool,
     is_dirty: bool,
     modal: Option<Modal>,
+    main_window: Window,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     ActionPerformed(text_editor::Action),
     ThemeSelected(Theme),
+    Event(window::Id, Event),
+    Window(window::Id, window::Event),
     NewFile,
     OpenFile,
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
@@ -95,7 +116,22 @@ pub enum Message {
 }
 
 impl Tsu {
-    fn new(filename: String) -> (Self, Task<Message>) {
+    fn new(filename: String, window_load: Result<data::Window, window::Error>) -> (Self, Task<Message>) {
+        let data::Window { size, position } = window_load.unwrap_or_default();
+        let position = position.map(window::Position::Specific).unwrap_or_default();
+        
+        let (main_window, open_main_window) = window::open(window::Settings {
+            size, position, min_size: Some(window::MIN_SIZE), exit_on_close_request: false, ..window::settings()
+        });
+
+        let main_window = Window::new(main_window);
+        
+        let mut commands = vec![
+            open_main_window.then(|_| Task::none()),
+            Task::perform(load_file(filename), Message::FileOpened),
+            iced::widget::focus_next(),
+        ];
+        
         (
             Self {
                 file: None,
@@ -105,11 +141,9 @@ impl Tsu {
                 is_loading: true,
                 is_dirty: false,
                 modal: None,
+                main_window,
             },
-            Task::batch([
-                Task::perform(load_file(filename), Message::FileOpened),
-                iced_widget::focus_next(),
-            ]),
+            Task::batch(commands),
         )
     }
 
@@ -129,6 +163,12 @@ impl Tsu {
             Message::ThemeSelected(theme) => {
                 self.theme = theme;
 
+                Task::none()
+            }
+            Message::Event(window, event) => {
+                Task::none()
+            }
+            Message::Window(id, event) => {
                 Task::none()
             }
             Message::NewFile => {
@@ -304,7 +344,11 @@ impl Tsu {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let mut subscriptions = vec![];
+        let mut subscriptions = vec![
+            events().map(|(window, event)| Message::Event(window, event)),
+            window::events()
+                .map(|(window, event)| Message::Window(window, event)),
+        ];
 
         Subscription::batch(subscriptions)
     }

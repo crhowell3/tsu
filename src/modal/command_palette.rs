@@ -3,8 +3,7 @@ use iced::{
     widget::{Button, Scrollable, column, container, text, text_input},
 };
 
-use crate::appearance::theme::scrollable;
-use crate::{appearance::theme, widget::Element};
+use crate::{theme, widget::Element};
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -62,10 +61,10 @@ impl State {
             })
             .collect();
 
-        let command_list: Scrollable<'a, Message> =
-            Scrollable::new(column(command_buttons).spacing(5)).height(Length::Fixed(200.0));
+        // let command_list: Scrollable<'a, Message> =
+        //     Scrollable::new(column(command_buttons).spacing(5)).height(Length::Fixed(200.0));
 
-        let content = column![input, command_list]
+        let content = column![input, /*command_list*/]
             .padding(20)
             .spacing(10)
             .width(Length::Fixed(400.0));
@@ -74,7 +73,7 @@ impl State {
             .padding(20)
             .width(Length::Shrink)
             .height(Length::Shrink)
-            .style(theme::container::general)
+            .style(theme::container::tooltip)
             .into()
     }
 }
