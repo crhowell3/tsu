@@ -18,6 +18,7 @@ where
     Modal::new(base, modal, on_blur).into()
 }
 
+/// A widget that centers a modal element over some base element
 pub struct Modal<'a, Message, Theme, Renderer> {
     base: Element<'a, Message, Theme, Renderer>,
     modal: Element<'a, Message, Theme, Renderer>,
@@ -25,6 +26,7 @@ pub struct Modal<'a, Message, Theme, Renderer> {
 }
 
 impl<'a, Message, Theme, Renderer> Modal<'a, Message, Theme, Renderer> {
+    /// Returns a new [`Modal`]
     pub fn new(
         base: impl Into<Element<'a, Message, Theme, Renderer>>,
         modal: impl Into<Element<'a, Message, Theme, Renderer>>,

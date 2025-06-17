@@ -1,5 +1,13 @@
+use std::time::Duration;
+
 use data::appearance;
+use futures::stream::BoxStream;
+use futures::{StreamExt, stream};
+use iced::advanced::graphics::futures::subscription;
+use iced::advanced::subscription::Hasher;
+use iced::{Subscription, futures};
 pub use theme::Theme;
+use tokio::time;
 
 pub mod theme;
 
@@ -38,4 +46,38 @@ pub fn theme(selected: &data::appearance::Selected) -> data::appearance::Theme {
             None => appearance::Theme::default(),
         },
     }
+}
+
+struct Appearance;
+
+impl subscription::Recipe for Appearance {
+    type Output = Mode;
+
+    fn hash(&self, state: &mut Hasher) {
+        use std::hash::Hash;
+        struct Marker;
+        std::any::TypeId::of::<Marker>().hash(state);
+    }
+    fn stream(self: Box<Self>, _input: subscription::EventStream) -> BoxStream<'static, Mode> {
+        let interval = time::interval(Duration::from_secs(5));
+
+        stream::unfold(
+            (interval, detect().unwrap_or(Mode::Light)),
+            move |(mut interval, old_mode)| async move {
+                loop {
+                    interval.tick().await;
+                    let new_mode = detect().unwrap_or(Mode::Light);
+
+                    if new_mode != old_mode {
+                        return Some((new_mode, (interval, new_mode)));
+                    }
+                }
+            },
+        )
+        .boxed()
+    }
+}
+
+pub fn subscription() -> Subscription<Mode> {
+    subscription::from_recipe(Appearance)
 }

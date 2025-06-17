@@ -2,7 +2,22 @@ pub use data::appearance::theme::{
     Button, Buttons, Colors, General, Text, color_to_hex, hex_to_color,
 };
 
+use crate::widget::combo_box;
+
+pub mod button;
+pub mod checkbox;
 pub mod container;
+pub mod context_menu;
+pub mod image;
+pub mod menu;
+pub mod pane_grid;
+pub mod progress_bar;
+pub mod rule;
+pub mod scrollable;
+pub mod selectable_text;
+pub mod text;
+pub mod text_editor;
+pub mod text_input;
 
 pub const TEXT_SIZE: f32 = 13.0;
 pub const ICON_SIZE: f32 = 12.0;
@@ -66,3 +81,5 @@ impl iced::theme::Base for Theme {
         None
     }
 }
+
+impl combo_box::Catalog for Theme {}

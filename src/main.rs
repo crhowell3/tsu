@@ -1,15 +1,7 @@
 mod appearance;
 mod modal;
 mod widget;
-
-use iced::keyboard;
-use iced::widget::{
-    self as iced_widget, button, center_x, column, container, horizontal_space, row, text,
-    text_editor, tooltip,
-};
-use iced::{Center, Element, Fill, Font, Task};
-
-use tracing::{debug, info};
+mod window;
 
 use std::env;
 use std::io;
@@ -17,10 +9,18 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use appearance::{Theme, theme};
-
 use clap::Parser;
+use iced::keyboard;
+use iced::widget::{
+    self as iced_widget, button, center_x, column, container, horizontal_space, row, text,
+    text_editor, tooltip,
+};
+use iced::{Center, Fill, Font, Subscription, Task};
+use tracing::{debug, error, info};
 
 use self::modal::Modal;
+use self::widget::Element;
+use self::window::Window;
 
 #[derive(Parser, Debug)]
 #[clap(name = "tsu")]
@@ -64,8 +64,9 @@ pub fn main() -> iced::Result {
     iced::daemon(move || Tsu::new(filename.clone()), Tsu::update, Tsu::view)
         .title(Tsu::title)
         .theme(Tsu::theme)
+        .subscription(Tsu::subscription)
         .run()
-        .inspect_err(|err| {})?;
+        .inspect_err(|err| error!("{err}"))?;
 
     Ok(())
 }
@@ -81,7 +82,7 @@ struct Tsu {
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     ActionPerformed(text_editor::Action),
     ThemeSelected(Theme),
     NewFile,
@@ -89,7 +90,7 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
-    Modal(modal::ModalMessage),
+    Modal(modal::Message),
     OpenedCommandPalette,
 }
 
@@ -99,7 +100,7 @@ impl Tsu {
             Self {
                 file: None,
                 content: text_editor::Content::new(),
-                theme: Theme::default(),
+                theme: appearance::Theme::default().into(),
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
@@ -112,7 +113,7 @@ impl Tsu {
         )
     }
 
-    fn title(&self) -> String {
+    fn title(&self, _window_id: window::Id) -> String {
         String::from("tsu")
     }
 
@@ -211,7 +212,7 @@ impl Tsu {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self, id: window::Id) -> Element<Message> {
         let controls = row![
             action(new_icon(), "New file", Some(Message::NewFile)),
             action(
@@ -250,52 +251,62 @@ impl Tsu {
         ]
         .spacing(10);
 
-        let base = column![
-            controls,
-            text_editor(&self.content)
-                .height(Fill)
-                .on_action(Message::ActionPerformed)
-                .wrapping(if self.word_wrap {
-                    text::Wrapping::Word
-                } else {
-                    text::Wrapping::None
-                })
-                .key_binding(|key_press| {
-                    match key_press.key.as_ref() {
-                        keyboard::Key::Character("s") if key_press.modifiers.control() => {
-                            debug!("CTRL + S pressed");
-                            Some(text_editor::Binding::Custom(Message::SaveFile))
+        let base = container(
+            column![
+                controls,
+                text_editor(&self.content)
+                    .height(Fill)
+                    .on_action(Message::ActionPerformed)
+                    .wrapping(if self.word_wrap {
+                        text::Wrapping::Word
+                    } else {
+                        text::Wrapping::None
+                    })
+                    .key_binding(|key_press| {
+                        match key_press.key.as_ref() {
+                            keyboard::Key::Character("s") if key_press.modifiers.control() => {
+                                debug!("CTRL + S pressed");
+                                Some(text_editor::Binding::Custom(Message::SaveFile))
+                            }
+                            keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                                debug!("ESC pressed");
+                                Some(text_editor::Binding::Unfocus)
+                            }
+                            keyboard::Key::Character("p")
+                                if key_press.modifiers.shift() && key_press.modifiers.control() =>
+                            {
+                                debug!("CTRL + SHIFT + P pressed");
+                                Some(text_editor::Binding::Custom(Message::OpenedCommandPalette))
+                            }
+                            _ => text_editor::Binding::from_key_press(key_press),
                         }
-                        keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                            debug!("ESC pressed");
-                            Some(text_editor::Binding::Unfocus)
-                        }
-                        keyboard::Key::Character("p")
-                            if key_press.modifiers.shift() && key_press.modifiers.control() =>
-                        {
-                            debug!("CTRL + SHIFT + P pressed");
-                            Some(text_editor::Binding::Custom(Message::OpenedCommandPalette))
-                        }
-                        _ => text_editor::Binding::from_key_press(key_press),
-                    }
-                }),
-            status,
-        ]
-        .spacing(10)
-        .padding(10);
+                    }),
+                status,
+            ]
+            .spacing(10)
+            .padding(10),
+        );
 
         let modal = &self.modal;
 
         match modal {
-            Some(modal) => widget::modal(base, modal.view().map(Message::Modal), || {
-                Message::Modal(modal::ModalMessage::Cancel)
-            }),
+            Some(modal) if modal.window_id() == Some(id) => {
+                widget::modal(base, modal.view().map(Message::Modal), || {
+                    Message::Modal(modal::Message::Cancel)
+                })
+            }
             _ => base.into(),
         }
     }
 
-    fn theme(&self) -> Theme {
+    fn theme(&self, _window_id: window::Id) -> Theme {
         self.theme.clone()
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        let mut subscriptions = vec![];
+
+        Subscription::batch(subscriptions)
     }
 }
 
@@ -359,10 +370,10 @@ fn action<'a, Message: Clone + 'a>(
             label,
             tooltip::Position::FollowCursor,
         )
-        .style(container::rounded_box)
+        .style(appearance::theme::container::general)
         .into()
     } else {
-        action.style(button::secondary).into()
+        action.style(appearance::theme::button::bare).into()
     }
 }
 
