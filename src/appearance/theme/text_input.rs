@@ -20,9 +20,8 @@ pub fn primary(theme: &Theme, status: Status) -> Style {
         background: Background::Color(theme.colors().general.background),
         border: Border {
             radius: 4.0.into(),
-            width: 0.0,
-            color: Color::TRANSPARENT,
-            // XXX Not currently displayed in application.
+            width: 1.0,
+            color: theme.colors().general.border,
         },
         icon: theme.colors().text.primary,
         placeholder: theme.colors().text.secondary,
@@ -40,9 +39,8 @@ pub fn primary(theme: &Theme, status: Status) -> Style {
             },
             border: Border {
                 radius: 4.0.into(),
-                width: 0.0,
-                color: Color::TRANSPARENT,
-                // XXX Not currently displayed in application.
+                width: 1.0,
+                color: theme.colors().general.border,
             },
             ..active
         },
