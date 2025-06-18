@@ -1,19 +1,18 @@
 [general]
-background = "#2b292d"
+background = "#282828"
 horizontal_rule = "#323034"
-unread_indicator = "#ffa07a"
-border = "#4f474d"
+border = "#fbf1c7"
 
 [text]
-primary = "#fecdb2"
-secondary = "#AB8A79"
-tertiary = "#d7bde2"
-success = "#b1b695"
-error = "#e06b75"
+primary = "#ebdbb2"
+secondary = "#d5c4a1"
+tertiary = "#bdae93"
+success = "#b8bb26"
+error = "#fb4934"
 
 [buttons.primary]
-background = "#2b292d"
-background_hover = "#242226"
+background = "#3c3836"
+background_hover = "#665c54"
 background_selected = "#1d1b1e"
 background_selected_hover = "#0D0C0D"
 

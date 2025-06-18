@@ -19,13 +19,13 @@ pub fn primary(theme: &Theme, status: Status) -> Style {
     Style {
         background: iced::Background::Color(general.background),
         border: iced::Border {
-            color: iced::Color::TRANSPARENT,
-            width: 0.0,
+            color: general.border,
+            width: 1.0,
             radius: 0.0.into(),
         },
         icon: iced::Color::WHITE,
         placeholder: iced::Color::WHITE,
         selection: iced::Color::WHITE,
-        value: iced::Color::WHITE,
+        value: theme.colors().text.primary,
     }
 }
