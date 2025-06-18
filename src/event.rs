@@ -1,4 +1,4 @@
-use iced::{Subscription, event, keyboard, mouse, window};
+use iced::{event, keyboard, mouse, window, Subscription};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {

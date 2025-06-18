@@ -27,6 +27,7 @@ pub type Row<'a, Message> = iced::widget::Row<'a, Message, Theme, Renderer>;
 pub type Text<'a> = iced::widget::Text<'a, Theme, Renderer>;
 pub type Container<'a, Message> = iced::widget::Container<'a, Message, Theme, Renderer>;
 pub type Button<'a, Message> = iced::widget::Button<'a, Message, Theme>;
+pub type Scrollable<'a, Message> = iced::widget::Scrollable<'a, Message, Theme, Renderer>;
 
 pub mod button {
     use super::Element;

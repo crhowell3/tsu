@@ -1,9 +1,12 @@
 use iced::{
+    widget::{column, container, text, text_input, Button},
     Length, Task,
-    widget::{Button, Scrollable, column, container, text, text_input},
 };
 
-use crate::{theme, widget::Element};
+use crate::{
+    theme,
+    widget::{Element, Scrollable},
+};
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -43,7 +46,7 @@ impl State {
         }
     }
 
-    pub fn view<'a>(&self) -> Element<'a, Message> {
+    pub fn view(&self) -> Element<Message> {
         let input = text_input("Start typing...", &self.input_value)
             .on_input(Message::InputChanged)
             .padding(10)
@@ -61,10 +64,10 @@ impl State {
             })
             .collect();
 
-        // let command_list: Scrollable<'a, Message> =
-        //     Scrollable::new(column(command_buttons).spacing(5)).height(Length::Fixed(200.0));
+        let command_list: Scrollable<Message> =
+            Scrollable::new(column(command_buttons).spacing(5)).height(Length::Fixed(200.0));
 
-        let content = column![input, /*command_list*/]
+        let content = column![input, command_list]
             .padding(20)
             .spacing(10)
             .width(Length::Fixed(400.0));
@@ -73,7 +76,7 @@ impl State {
             .padding(20)
             .width(Length::Shrink)
             .height(Length::Shrink)
-            .style(theme::container::tooltip)
+            .style(theme::container::general)
             .into()
     }
 }
