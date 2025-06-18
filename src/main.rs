@@ -1,5 +1,9 @@
+#![allow(clippy::large_enum_variant, clippy::too_many_arguments)]
+
 mod appearance;
 mod event;
+mod font;
+mod icon;
 mod modal;
 mod widget;
 mod window;
@@ -13,10 +17,9 @@ use appearance::{Theme, theme};
 use clap::Parser;
 use iced::keyboard;
 use iced::widget::{
-    self as iced_widget, button, center_x, column, container, horizontal_space, row, text,
-    text_editor, tooltip,
+    button, center_x, column, container, horizontal_space, row, text, text_editor, tooltip,
 };
-use iced::{Center, Fill, Font, Subscription, Task};
+use iced::{Center, Fill, Subscription, Task};
 use tokio::runtime;
 use tracing::{debug, error, info};
 
@@ -69,11 +72,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             .enable_all()
             .build()?;
 
-        rt.block_on(async {
-            let window = data::Window::load().await;
-
-            window
-        })
+        rt.block_on(async { data::Window::load().await })
     };
 
     info!("Starting tsu GUI...");
@@ -135,7 +134,7 @@ impl Tsu {
 
         let main_window = Window::new(main_window);
 
-        let mut commands = vec![
+        let commands = vec![
             open_main_window.then(|_| Task::none()),
             Task::perform(load_file(filename), Message::FileOpened),
             iced::widget::focus_next(),
@@ -145,7 +144,7 @@ impl Tsu {
             Self {
                 file: None,
                 content: text_editor::Content::new(),
-                theme: appearance::Theme::default().into(),
+                theme: appearance::Theme::default(),
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
@@ -174,7 +173,7 @@ impl Tsu {
 
                 Task::none()
             }
-            Message::Event(window, event) => Task::none(),
+            Message::Event(_window, _event) => Task::none(),
             Message::Window(id, event) => {
                 if id == self.main_window.id {
                     match event {
@@ -291,14 +290,14 @@ impl Tsu {
     fn view(&self, id: window::Id) -> Element<Message> {
         if id == self.main_window.id {
             let controls = row![
-                action(new_icon(), "New file", Some(Message::NewFile)),
+                action(icon::new_icon(), "New file", Some(Message::NewFile)),
                 action(
-                    open_icon(),
+                    icon::open_icon(),
                     "Open file",
                     (!self.is_loading).then_some(Message::OpenFile)
                 ),
                 action(
-                    save_icon(),
+                    icon::save_icon(),
                     "Save file",
                     self.is_dirty.then_some(Message::SaveFile)
                 ),
@@ -390,7 +389,7 @@ impl Tsu {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let mut subscriptions = vec![
+        let subscriptions = vec![
             events().map(|(window, event)| Message::Event(window, event)),
             window::events().map(|(window, event)| Message::Window(window, event)),
         ];
@@ -464,22 +463,4 @@ fn action<'a, Message: Clone + 'a>(
     } else {
         action.style(appearance::theme::button::bare).into()
     }
-}
-
-fn new_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e800}')
-}
-
-fn save_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e801}')
-}
-
-fn open_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0f115}')
-}
-
-fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
-    const ICON_FONT: Font = Font::with_name("editor-icons");
-
-    text(codepoint).font(ICON_FONT).into()
 }
