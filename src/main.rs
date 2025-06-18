@@ -197,8 +197,10 @@ impl Tsu {
                             return iced::exit();
                         }
                     }
+                    Task::none()
+                } else {
+                    Task::none()
                 }
-                Task::none()
             }
             Message::NewFile => {
                 if !self.is_loading {
@@ -274,7 +276,12 @@ impl Tsu {
             }
             Message::OpenedCommandPalette => {
                 self.modal = Some(Modal::CommandPalette(modal::command_palette::State::new(
-                    vec!["Something".into()],
+                    vec![
+                        "Copy".into(),
+                        "Close Window".into(),
+                        "Cut".into(),
+                        "Paste".into(),
+                    ],
                 )));
                 Task::none()
             }
@@ -282,89 +289,99 @@ impl Tsu {
     }
 
     fn view(&self, id: window::Id) -> Element<Message> {
-        let controls = row![
-            action(new_icon(), "New file", Some(Message::NewFile)),
-            action(
-                open_icon(),
-                "Open file",
-                (!self.is_loading).then_some(Message::OpenFile)
-            ),
-            action(
-                save_icon(),
-                "Save file",
-                self.is_dirty.then_some(Message::SaveFile)
-            ),
-            horizontal_space(),
-        ]
-        .spacing(10)
-        .align_y(Center);
-
-        let status = row![
-            text(if let Some(path) = &self.file {
-                let path = path.display().to_string();
-
-                if path.len() > 60 {
-                    format!("...{}", &path[path.len() - 40..])
-                } else {
-                    path
-                }
-            } else {
-                String::from("New file")
-            }),
-            horizontal_space(),
-            text({
-                let (line, column) = self.content.cursor_position();
-
-                format!("{}:{}", line + 1, column + 1)
-            })
-        ]
-        .spacing(10);
-
-        let base = container(
-            column![
-                controls,
-                text_editor(&self.content)
-                    .height(Fill)
-                    .on_action(Message::ActionPerformed)
-                    .wrapping(if self.word_wrap {
-                        text::Wrapping::Word
-                    } else {
-                        text::Wrapping::None
-                    })
-                    .key_binding(|key_press| {
-                        match key_press.key.as_ref() {
-                            keyboard::Key::Character("s") if key_press.modifiers.control() => {
-                                debug!("CTRL + S pressed");
-                                Some(text_editor::Binding::Custom(Message::SaveFile))
-                            }
-                            keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                                debug!("ESC pressed");
-                                Some(text_editor::Binding::Unfocus)
-                            }
-                            keyboard::Key::Character("p")
-                                if key_press.modifiers.shift() && key_press.modifiers.control() =>
-                            {
-                                debug!("CTRL + SHIFT + P pressed");
-                                Some(text_editor::Binding::Custom(Message::OpenedCommandPalette))
-                            }
-                            _ => text_editor::Binding::from_key_press(key_press),
-                        }
-                    }),
-                status,
+        if id == self.main_window.id {
+            let controls = row![
+                action(new_icon(), "New file", Some(Message::NewFile)),
+                action(
+                    open_icon(),
+                    "Open file",
+                    (!self.is_loading).then_some(Message::OpenFile)
+                ),
+                action(
+                    save_icon(),
+                    "Save file",
+                    self.is_dirty.then_some(Message::SaveFile)
+                ),
+                horizontal_space(),
             ]
             .spacing(10)
-            .padding(10),
-        );
+            .align_y(Center);
 
-        let modal = &self.modal;
+            let status = row![
+                text(if let Some(path) = &self.file {
+                    let path = path.display().to_string();
 
-        match modal {
-            Some(modal) if modal.window_id() == Some(id) => {
-                widget::modal(base, modal.view().map(Message::Modal), || {
-                    Message::Modal(modal::Message::Cancel)
+                    if path.len() > 60 {
+                        format!("...{}", &path[path.len() - 40..])
+                    } else {
+                        path
+                    }
+                } else {
+                    String::from("New file")
+                }),
+                horizontal_space(),
+                text({
+                    let (line, column) = self.content.cursor_position();
+
+                    format!("{}:{}", line + 1, column + 1)
                 })
+            ]
+            .spacing(10);
+
+            let base = container(
+                column![
+                    controls,
+                    text_editor(&self.content)
+                        .height(Fill)
+                        .on_action(Message::ActionPerformed)
+                        .wrapping(if self.word_wrap {
+                            text::Wrapping::Word
+                        } else {
+                            text::Wrapping::None
+                        })
+                        .key_binding(|key_press| {
+                            match key_press.key.as_ref() {
+                                keyboard::Key::Character("s") if key_press.modifiers.control() => {
+                                    debug!("CTRL + S pressed");
+                                    Some(text_editor::Binding::Custom(Message::SaveFile))
+                                }
+                                keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                                    debug!("ESC pressed");
+                                    Some(text_editor::Binding::Unfocus)
+                                }
+                                keyboard::Key::Character("p")
+                                    if key_press.modifiers.shift()
+                                        && key_press.modifiers.control() =>
+                                {
+                                    debug!("CTRL + SHIFT + P pressed");
+                                    Some(text_editor::Binding::Custom(
+                                        Message::OpenedCommandPalette,
+                                    ))
+                                }
+                                _ => text_editor::Binding::from_key_press(key_press),
+                            }
+                        }),
+                    status,
+                ]
+                .spacing(10)
+                .padding(10),
+            );
+
+            let modal = &self.modal;
+
+            match modal {
+                Some(modal)
+                    if modal.window_id() == Some(self.main_window.id)
+                        || modal.window_id().is_none() =>
+                {
+                    widget::modal(base, modal.view().map(Message::Modal), || {
+                        Message::Modal(modal::Message::Cancel)
+                    })
+                }
+                _ => base.into(),
             }
-            _ => base.into(),
+        } else {
+            column![].into()
         }
     }
 

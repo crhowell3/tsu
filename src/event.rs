@@ -1,8 +1,10 @@
-use iced::{event, keyboard, mouse, window, Subscription};
+use iced::{Subscription, event, keyboard, mouse, window};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
     Escape,
+    LeftClick,
+    OpenControlPalette,
 }
 
 pub fn events() -> Subscription<(window::Id, Event)> {
@@ -21,6 +23,16 @@ fn filtered_events(
             key: keyboard::Key::Named(keyboard::key::Named::Escape),
             ..
         }) => Some(Event::Escape),
+        iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if ignored(status) => {
+            Some(Event::LeftClick)
+        }
+        iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Character(p),
+            modifiers,
+            ..
+        }) if p.as_str() == "p" && modifiers.command() && modifiers.shift() => {
+            Some(Event::OpenControlPalette)
+        }
         _ => None,
     };
 
