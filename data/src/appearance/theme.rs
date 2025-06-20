@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
 use iced_core::Color;
-use palette::rgb::{Rgb, Rgba};
-use palette::{FromColor, Hsva, Okhsl, Srgba};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::fs;
@@ -26,6 +24,7 @@ impl Default for Theme {
 }
 
 impl Theme {
+    #[must_use]
     pub fn new(name: String, colors: Colors) -> Self {
         Theme { name, colors }
     }
@@ -42,6 +41,9 @@ pub struct Colors {
 }
 
 impl Colors {
+    /// # Errors
+    ///
+    /// Will return `Error` if unable to write data to the provided file path.
     pub async fn save(self, path: PathBuf) -> Result<(), Error> {
         let content = toml::to_string(&self)?;
 
@@ -115,6 +117,7 @@ impl Default for Colors {
     }
 }
 
+#[must_use]
 pub fn hex_to_color(hex: &str) -> Option<Color> {
     if hex.len() == 7 || hex.len() == 9 {
         let hash = &hex[0..1];
@@ -127,16 +130,16 @@ pub fn hex_to_color(hex: &str) -> Option<Color> {
 
         return match (hash, r, g, b, a) {
             ("#", Ok(r), Ok(g), Ok(b), None) => Some(Color {
-                r: r as f32 / 255.0,
-                g: g as f32 / 255.0,
-                b: b as f32 / 255.0,
+                r: f32::from(r) / 255.0,
+                g: f32::from(g) / 255.0,
+                b: f32::from(b) / 255.0,
                 a: 1.0,
             }),
             ("#", Ok(r), Ok(g), Ok(b), Some(a)) => Some(Color {
-                r: r as f32 / 255.0,
-                g: g as f32 / 255.0,
-                b: b as f32 / 255.0,
-                a: a as f32 / 255.0,
+                r: f32::from(r) / 255.0,
+                g: f32::from(g) / 255.0,
+                b: f32::from(b) / 255.0,
+                a: f32::from(a) / 255.0,
             }),
             _ => None,
         };
@@ -145,6 +148,7 @@ pub fn hex_to_color(hex: &str) -> Option<Color> {
     None
 }
 
+#[must_use]
 pub fn color_to_hex(color: Color) -> String {
     use std::fmt::Write;
 

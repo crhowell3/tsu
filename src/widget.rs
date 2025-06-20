@@ -1,13 +1,10 @@
 #![allow(dead_code)]
-use iced::advanced::text;
 
 pub use self::combo_box::combo_box;
 pub use self::context_menu::context_menu;
 pub use self::decorate::decorate;
 pub use self::double_pass::double_pass;
 pub use self::modal::modal;
-pub use self::selectable_rich_text::selectable_rich_text;
-pub use self::selectable_text::selectable_text;
 use crate::Theme;
 
 pub mod combo_box;

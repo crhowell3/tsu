@@ -1,3 +1,4 @@
+#![allow(clippy::trivially_copy_pass_by_ref, clippy::ref_option)]
 use std::path::PathBuf;
 use std::{io, sync::Arc};
 
@@ -29,6 +30,7 @@ impl Default for Window {
     }
 }
 
+#[must_use]
 pub fn default_size() -> Size {
     Size {
         width: 1024.0,
@@ -37,6 +39,10 @@ pub fn default_size() -> Size {
 }
 
 impl Window {
+    /// # Errors
+    ///
+    /// Will return `Error` if serde is unable to deserialize the data, or could
+    /// return `Error` due to IO failure.
     pub async fn load() -> Result<Window, Error> {
         let path = path()?;
         let bytes = fs::read(path).await?;
@@ -48,6 +54,10 @@ impl Window {
         Ok(Window { position, size })
     }
 
+    /// # Errors
+    ///
+    /// Will return `Error` if serde is unable to serialize the data, or could
+    /// return `Error` due to IO failure.
     pub async fn save(self) -> Result<(), Error> {
         let path = path()?;
 
@@ -91,7 +101,7 @@ impl From<io::Error> for Error {
 mod serde_position {
     use serde::{Deserializer, Serializer};
 
-    use super::*;
+    use super::{Deserialize, Point, Serialize};
 
     #[derive(Deserialize, Serialize)]
     struct SerdePosition {
@@ -121,7 +131,7 @@ mod serde_position {
 mod serde_size {
     use serde::{Deserializer, Serializer};
 
-    use super::*;
+    use super::{Deserialize, Serialize, Size};
 
     #[derive(Deserialize, Serialize)]
     struct SerdeSize {

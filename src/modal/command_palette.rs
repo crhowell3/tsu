@@ -1,6 +1,6 @@
 use iced::{
-    widget::{column, container, text, text_input, Button},
     Length, Task,
+    widget::{Button, column, container, text, text_input},
 };
 
 use crate::{
@@ -33,7 +33,7 @@ impl State {
     pub fn update(&mut self, message: &Message) -> (Task<Message>, Option<super::Event>) {
         match message {
             Message::InputChanged(input) => {
-                self.input_value = input.clone();
+                self.input_value.clone_from(input);
                 self.filtered = self
                     .commands
                     .iter()
@@ -42,7 +42,7 @@ impl State {
                     .collect();
                 (Task::none(), None)
             }
-            Message::ExecuteCommand(cmd) => (Task::none(), Some(super::Event::CloseModal)),
+            Message::ExecuteCommand(_cmd) => (Task::none(), Some(super::Event::CloseModal)),
         }
     }
 

@@ -2,7 +2,7 @@ pub use data::window::{Error, MIN_SIZE};
 use futures::stream::BoxStream;
 use futures::{Stream, StreamExt};
 use iced::advanced::graphics::futures::subscription;
-pub use iced::window::{Id, Position, Settings, close, gain_focus, get_latest, open};
+pub use iced::window::{Id, Position, Settings, get_latest, open};
 use iced::{Point, Size, Subscription, Task};
 
 #[derive(Debug, Clone, Copy)]

@@ -10,6 +10,7 @@ impl Size {
     pub const MIN_WIDTH: f32 = 426.0;
     pub const MIN_HEIGHT: f32 = 240.0;
 
+    #[must_use]
     pub fn new(width: f32, height: f32) -> Self {
         Self {
             width: width.max(Self::MIN_WIDTH),

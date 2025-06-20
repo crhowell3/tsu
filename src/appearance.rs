@@ -21,8 +21,7 @@ impl From<dark_light::Mode> for Mode {
     fn from(mode: dark_light::Mode) -> Self {
         match mode {
             dark_light::Mode::Dark => Mode::Dark,
-            dark_light::Mode::Light => Mode::Light,
-            dark_light::Mode::Unspecified => Mode::Light,
+            dark_light::Mode::Light | dark_light::Mode::Unspecified => Mode::Light,
         }
     }
 }

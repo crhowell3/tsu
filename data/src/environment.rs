@@ -8,18 +8,14 @@ pub const APPLICATION_ID: &str = "org.crhowell3.tsu";
 pub const RELEASE_WEBSITE: &str = "https://github.com/crhowell3/tsu/releases/latest";
 pub const SOURCE_WEBSITE: &str = "https://github.com/crhowell3/tsu/";
 
-// pub fn formatted_version() -> String {
-//     let hash = GIT_HASH
-//         .map(|hash| format!(" ({hash})"))
-//         .unwrap_or_default();
-
-//     format!("{VERSION}{hash}")
-// }
-
 pub fn config_dir() -> PathBuf {
     portable_dir().unwrap_or_else(platform_specific_config_dir)
 }
 
+/// # Panics
+///
+/// Will panic if given invalid data directory.
+#[must_use]
 pub fn data_dir() -> PathBuf {
     portable_dir().unwrap_or_else(|| {
         dirs_next::data_dir()
@@ -28,6 +24,10 @@ pub fn data_dir() -> PathBuf {
     })
 }
 
+/// # Panics
+///
+/// Will panic if given invalid cache directory.
+#[must_use]
 pub fn cache_dir() -> PathBuf {
     dirs_next::cache_dir()
         .expect("expected valid cache dir")

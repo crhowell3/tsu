@@ -7,6 +7,7 @@ pub struct Position {
 }
 
 impl Position {
+    #[must_use]
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }

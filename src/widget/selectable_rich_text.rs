@@ -376,8 +376,9 @@ where
                 }
             }
             iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
-            | iced::Event::Touch(touch::Event::FingerLifted { .. })
-            | iced::Event::Touch(touch::Event::FingerLost { .. }) => {
+            | iced::Event::Touch(
+                touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. },
+            ) => {
                 if let Some(on_link_click) = self.on_link.as_ref() {
                     if let Some(span_pressed) = state.span_pressed {
                         state.span_pressed = None;

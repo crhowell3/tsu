@@ -20,17 +20,7 @@ pub fn primary(theme: &Theme, status: Status) -> Style {
     let text = theme.colors().text;
 
     match status {
-        Status::Active { .. } => Style {
-            background: iced::Background::Color(general.background),
-            icon_color: text.primary,
-            border: Border {
-                color: general.border,
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            text_color: Some(text.primary),
-        },
-        Status::Hovered { .. } => Style {
+        Status::Hovered { .. } | Status::Active { .. } => Style {
             background: iced::Background::Color(general.background),
             icon_color: text.primary,
             border: Border {

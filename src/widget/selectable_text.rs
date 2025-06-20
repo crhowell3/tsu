@@ -201,8 +201,9 @@ where
                 }
             }
             iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
-            | iced::Event::Touch(touch::Event::FingerLifted { .. })
-            | iced::Event::Touch(touch::Event::FingerLost { .. }) => {
+            | iced::Event::Touch(
+                touch::Event::FingerLifted { .. } | touch::Event::FingerLost { .. },
+            ) => {
                 if let Interaction::Selecting(raw) = state.interaction {
                     state.interaction = Interaction::Selected(raw);
                 } else {
