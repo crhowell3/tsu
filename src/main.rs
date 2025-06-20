@@ -290,23 +290,6 @@ impl Tsu {
 
     fn view(&self, id: window::Id) -> Element<Message> {
         if id == self.main_window.id {
-            let controls = row![
-                action(icon::new_icon(), "New file", Some(Message::NewFile)),
-                action(
-                    icon::open_icon(),
-                    "Open file",
-                    (!self.is_loading).then_some(Message::OpenFile)
-                ),
-                action(
-                    icon::save_icon(),
-                    "Save file",
-                    self.is_dirty.then_some(Message::SaveFile)
-                ),
-                horizontal_space(),
-            ]
-            .spacing(10)
-            .align_y(Center);
-
             let status = row![
                 text(if let Some(path) = &self.file {
                     let path = path.display().to_string();
@@ -330,7 +313,6 @@ impl Tsu {
 
             let base = container(
                 column![
-                    controls,
                     text_editor(&self.content)
                         .height(Fill)
                         .on_action(Message::ActionPerformed)
