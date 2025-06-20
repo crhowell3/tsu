@@ -47,6 +47,7 @@ struct Args {
     #[arg(short, action = clap::ArgAction::Count, help="Increases logging verbosity (-v, -vv, -vvv)")]
     verbose: u8,
     /// File to open
+    #[arg(default_value = "")]
     file: String,
 }
 
