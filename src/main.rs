@@ -19,7 +19,7 @@ use iced::keyboard;
 use iced::widget::{
     button, center_x, column, container, horizontal_space, row, text, text_editor, tooltip,
 };
-use iced::{Center, Fill, Subscription, Task};
+use iced::{Fill, Subscription, Task};
 use tokio::runtime;
 use tracing::{debug, error, info};
 
@@ -426,24 +426,4 @@ async fn save_file(path: Option<PathBuf>, contents: String) -> Result<PathBuf, E
         .map_err(|error| Error::IoError(error.kind()))?;
 
     Ok(path)
-}
-
-fn action<'a, Message: Clone + 'a>(
-    content: impl Into<Element<'a, Message>>,
-    label: &'a str,
-    on_press: Option<Message>,
-) -> Element<'a, Message> {
-    let action = button(center_x(content).width(30));
-
-    if let Some(on_press) = on_press {
-        tooltip(
-            action.on_press(on_press),
-            label,
-            tooltip::Position::FollowCursor,
-        )
-        .style(appearance::theme::container::general)
-        .into()
-    } else {
-        action.style(appearance::theme::button::bare).into()
-    }
 }
