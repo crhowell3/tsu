@@ -1,0 +1,23 @@
+[general]
+background = "#282828"
+horizontal_rule = "#323034"
+border = "#fbf1c7"
+
+[text]
+primary = "#ebdbb2"
+secondary = "#d5c4a1"
+tertiary = "#bdae93"
+success = "#b8bb26"
+error = "#fb4934"
+
+[buttons.primary]
+background = "#3c3836"
+background_hover = "#665c54"
+background_selected = "#1d1b1e"
+background_selected_hover = "#0D0C0D"
+
+[buttons.secondary]
+background = "#323034"
+background_hover = "#3e3c41"
+background_selected = "#606155"
+background_selected_hover = "#6F7160"
