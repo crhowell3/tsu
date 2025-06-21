@@ -1,12 +1,20 @@
 use std::env;
 use std::path::PathBuf;
 
-// pub const VERSION: &str = env!("VERSION");
+pub const VERSION: &str = env!("VERSION");
 pub const GIT_HASH: Option<&str> = option_env!("GIT_HASH");
 pub const CONFIG_FILE_NAME: &str = "config.toml";
 pub const APPLICATION_ID: &str = "org.crhowell3.tsu";
 pub const RELEASE_WEBSITE: &str = "https://github.com/crhowell3/tsu/releases/latest";
 pub const SOURCE_WEBSITE: &str = "https://github.com/crhowell3/tsu/";
+
+pub fn formatted_version() -> String {
+    let hash = GIT_HASH
+        .map(|hash| format!(" ({hash})"))
+        .unwrap_or_default();
+
+    format!("{VERSION}{hash}")
+}
 
 pub fn config_dir() -> PathBuf {
     portable_dir().unwrap_or_else(platform_specific_config_dir)

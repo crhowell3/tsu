@@ -68,8 +68,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(filter)
         .init();
 
-    debug!("config dir: {:?}", environment::config_dir());
-    debug!("data dir: {:?}", environment::data_dir());
+    info!("tsu {} has started", environment::formatted_version());
+    info!("tsu config dir: {:?}", environment::config_dir());
+    info!("tsu data dir: {:?}", environment::data_dir());
 
     let (config_load, window_load) = {
         let rt = runtime::Builder::new_current_thread()
@@ -89,7 +90,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let settings = settings(&config_load);
 
-    info!("Starting tsu GUI...");
     iced::daemon(
         move || Tsu::new(filename.clone(), window_load.clone()),
         Tsu::update,
