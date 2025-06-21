@@ -4,7 +4,6 @@ mod appearance;
 mod event;
 mod font;
 mod icon;
-mod modal;
 mod widget;
 mod window;
 
@@ -24,7 +23,6 @@ use tokio::runtime;
 use tracing::{debug, error, info};
 
 use self::event::{Event, events};
-use self::modal::Modal;
 use self::widget::Element;
 use self::window::Window;
 
@@ -128,7 +126,6 @@ struct Tsu {
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
-    modal: Option<Modal>,
     main_window: Window,
 }
 
@@ -143,8 +140,6 @@ pub enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     SaveFile,
     FileSaved(Result<PathBuf, Error>),
-    Modal(modal::Message),
-    OpenedCommandPalette,
 }
 
 impl Tsu {
@@ -179,7 +174,6 @@ impl Tsu {
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
-                modal: None,
                 main_window,
             },
             Task::batch(commands),
@@ -287,34 +281,6 @@ impl Tsu {
 
                 Task::none()
             }
-            Message::Modal(message) => {
-                let Some(modal) = &mut self.modal else {
-                    return Task::none();
-                };
-
-                let (command, event) = modal.update(&message);
-
-                if let Some(event) = event {
-                    match event {
-                        modal::Event::CloseModal => {
-                            self.modal = None;
-                        }
-                    }
-                }
-
-                command.map(Message::Modal)
-            }
-            Message::OpenedCommandPalette => {
-                self.modal = Some(Modal::CommandPalette(modal::command_palette::State::new(
-                    vec![
-                        "Copy".into(),
-                        "Close Window".into(),
-                        "Cut".into(),
-                        "Paste".into(),
-                    ],
-                )));
-                Task::none()
-            }
         }
     }
 
@@ -361,15 +327,6 @@ impl Tsu {
                                     debug!("ESC pressed");
                                     Some(text_editor::Binding::Unfocus)
                                 }
-                                keyboard::Key::Character("p")
-                                    if key_press.modifiers.shift()
-                                        && key_press.modifiers.control() =>
-                                {
-                                    debug!("CTRL + SHIFT + P pressed");
-                                    Some(text_editor::Binding::Custom(
-                                        Message::OpenedCommandPalette,
-                                    ))
-                                }
                                 _ => text_editor::Binding::from_key_press(key_press),
                             }
                         }),
@@ -379,19 +336,7 @@ impl Tsu {
                 .padding(10),
             );
 
-            let modal = &self.modal;
-
-            match modal {
-                Some(modal)
-                    if modal.window_id() == Some(self.main_window.id)
-                        || modal.window_id().is_none() =>
-                {
-                    widget::modal(base, modal.view().map(Message::Modal), || {
-                        Message::Modal(modal::Message::Cancel)
-                    })
-                }
-                _ => base.into(),
-            }
+            base.into()
         } else {
             column![].into()
         }
