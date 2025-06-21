@@ -57,7 +57,7 @@ The tsu text editor can be installed from source:
 ```shell
 git clone https://github.com/crhowell3/tsu.git
 cd tsu
-cargo install --path . --release
+cargo install --path .
 ```
 
 <p align="center">

@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
+use data::config::{self, Config};
+
 use iced::font;
 
 pub static MONO: Font = Font::new(false, false);
@@ -48,6 +50,36 @@ impl From<Font> for iced::Font {
     }
 }
 
+pub fn set(config: Option<&Config>) {
+    let family = config
+        .and_then(|config| config.font.family.clone())
+        .unwrap_or_else(|| String::from("Iosevka Term"));
+    let weight = config.map_or(font::Weight::Normal, |config| config.font.weight);
+    let bold_weight = config
+        .and_then(|config| config.font.bold_weight)
+        .unwrap_or(match weight {
+            font::Weight::Thin => font::Weight::Normal,
+            font::Weight::ExtraLight => font::Weight::Medium,
+            font::Weight::Light => font::Weight::Semibold,
+            font::Weight::Normal => font::Weight::Bold,
+            font::Weight::Medium => font::Weight::ExtraBold,
+            font::Weight::Semibold
+            | font::Weight::Bold
+            | font::Weight::ExtraBold
+            | font::Weight::Black => font::Weight::Black,
+        });
+
+    MONO.set(family.clone(), weight, bold_weight);
+    MONO_BOLD.set(family.clone(), weight, bold_weight);
+    MONO_ITALICS.set(family.clone(), weight, bold_weight);
+    MONO_BOLD_ITALICS.set(family, weight, bold_weight);
+}
+
 pub fn load() -> Vec<Cow<'static, [u8]>> {
-    vec![include_bytes!("../fonts/icons.ttf").as_slice().into()]
+    vec![
+        include_bytes!("../fonts/iosevka-term-regular.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../fonts/icons.ttf").as_slice().into(),
+    ]
 }
