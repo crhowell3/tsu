@@ -98,6 +98,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     .title(Tsu::title)
     .theme(Tsu::theme)
     .subscription(Tsu::subscription)
+    .settings(settings)
     .run()
     .inspect_err(|err| error!("{err}"))?;
 
