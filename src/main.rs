@@ -15,10 +15,10 @@ use std::sync::Arc;
 
 use appearance::{Theme, theme};
 use clap::Parser;
+use data::config::{self, Config};
+use data::environment;
 use iced::keyboard;
-use iced::widget::{
-    button, center_x, column, container, horizontal_space, row, text, text_editor, tooltip,
-};
+use iced::widget::{column, container, horizontal_space, row, text, text_editor};
 use iced::{Fill, Subscription, Task};
 use tokio::runtime;
 use tracing::{debug, error, info};
@@ -68,15 +68,28 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(filter)
         .init();
 
-    let window_load = {
+    info!("tsu {} has started", environment::formatted_version());
+    info!("tsu config dir: {:?}", environment::config_dir());
+    info!("tsu data dir: {:?}", environment::data_dir());
+
+    let (config_load, window_load) = {
         let rt = runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
 
-        rt.block_on(async { data::Window::load().await })
+        rt.block_on(async {
+            let config = Config::load().await;
+            let window = data::Window::load().await;
+
+            (config, window)
+        })
     };
 
-    info!("Starting tsu GUI...");
+    // Font must be set using config
+    font::set(config_load.as_ref().ok());
+
+    let settings = settings(&config_load);
+
     iced::daemon(
         move || Tsu::new(filename.clone(), window_load.clone()),
         Tsu::update,
@@ -85,10 +98,27 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     .title(Tsu::title)
     .theme(Tsu::theme)
     .subscription(Tsu::subscription)
+    .settings(settings)
     .run()
     .inspect_err(|err| error!("{err}"))?;
 
     Ok(())
+}
+
+fn settings(config_load: &Result<Config, config::Error>) -> iced::Settings {
+    let default_text_size = config_load
+        .as_ref()
+        .ok()
+        .and_then(|config| config.font.size)
+        .map_or(theme::TEXT_SIZE, f32::from);
+
+    iced::Settings {
+        default_font: font::MONO.clone().into(),
+        default_text_size: default_text_size.into(),
+        id: None,
+        antialiasing: false,
+        fonts: font::load(),
+    }
 }
 
 struct Tsu {

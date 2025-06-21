@@ -12,6 +12,7 @@ dev = []
 futures = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "fs"] }
+tokio-stream = { workspace = true, features = ["time", "fs"] }
 itertools = { workspace = true }
 palette = { workspace = true }
 
