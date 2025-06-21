@@ -4,6 +4,7 @@ mod appearance;
 mod event;
 mod font;
 mod icon;
+mod screen;
 mod widget;
 mod window;
 
@@ -16,7 +17,9 @@ use appearance::{Theme, theme};
 use clap::Parser;
 use data::config::{self, Config};
 use data::environment;
+use iced::Length;
 use iced::keyboard;
+use iced::padding;
 use iced::widget::{column, container, horizontal_space, row, text, text_editor};
 use iced::{Fill, Subscription, Task};
 use tokio::runtime;
@@ -89,7 +92,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = settings(&config_load);
 
     iced::daemon(
-        move || Tsu::new(filename.clone(), window_load.clone()),
+        move || Tsu::new(filename.clone(), window_load.clone(), config_load.clone()),
         Tsu::update,
         Tsu::view,
     )
@@ -120,13 +123,19 @@ fn settings(config_load: &Result<Config, config::Error>) -> iced::Settings {
 }
 
 struct Tsu {
+    screen: Screen,
+    theme: Theme,
+    config: Config,
+    main_window: Window,
     file: Option<PathBuf>,
     content: text_editor::Content,
-    theme: Theme,
     word_wrap: bool,
     is_loading: bool,
     is_dirty: bool,
-    main_window: Window,
+}
+
+pub enum Screen {
+    Editor(screen::Editor),
 }
 
 #[derive(Debug, Clone)]
@@ -146,6 +155,7 @@ impl Tsu {
     fn new(
         filename: String,
         window_load: Result<data::Window, window::Error>,
+        config_load: Result<Config, config::Error>,
     ) -> (Self, Task<Message>) {
         let data::Window { size, position } = window_load.unwrap_or_default();
         let position = position.map(window::Position::Specific).unwrap_or_default();
@@ -160,21 +170,42 @@ impl Tsu {
 
         let main_window = Window::new(main_window);
 
+        let load_editor = |config| match data::Editor::load() {
+            Ok(editor) => screen::Editor::restore(editor, config, &main_window),
+            Err(error) => {
+                warn!("failed to load editor: {error}");
+
+                screen::Editor::empty(config, &main_window)
+            }
+        };
+
+        let (screen, config, command) = match config_load {
+            Ok(config) => {
+                let (screen, command) = load_editor(&config);
+
+                (Screen::Editor(screen), config, command.map(Message::Editor))
+            }
+            Err(error) => (Screen::Editor(screen), Config::default(), Task::none()),
+        };
+
         let commands = vec![
             open_main_window.then(|_| Task::none()),
+            command,
             Task::perform(load_file(filename), Message::FileOpened),
             iced::widget::focus_next(),
         ];
 
         (
             Self {
+                screen,
+                theme: appearance::Theme::default(),
+                config,
+                main_window,
                 file: None,
                 content: text_editor::Content::new(),
-                theme: appearance::Theme::default(),
                 word_wrap: true,
                 is_loading: true,
                 is_dirty: false,
-                main_window,
             },
             Task::batch(commands),
         )
@@ -285,58 +316,23 @@ impl Tsu {
     }
 
     fn view(&self, id: window::Id) -> Element<Message> {
+        let height_margin = if cfg!(target_os = "macos") { 20 } else { 0 };
         if id == self.main_window.id {
-            let status = row![
-                text(if let Some(path) = &self.file {
-                    let path = path.display().to_string();
+            let screen = match &self.screen {
+                Screen::Editor(editor) => {
+                    editor.view(&self.config, &self.theme).map(Message::Editor)
+                }
+            };
 
-                    if path.len() > 60 {
-                        format!("...{}", &path[path.len() - 40..])
-                    } else {
-                        path
-                    }
-                } else {
-                    String::from("New file")
-                }),
-                horizontal_space(),
-                text({
-                    let (line, column) = self.content.cursor_position();
+            let content = container(
+                container(screen)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(theme::container::general),
+            )
+            .padding(padding::top(height_margin));
 
-                    format!("{}:{}", line + 1, column + 1)
-                })
-            ]
-            .spacing(10);
-
-            let base = container(
-                column![
-                    text_editor(&self.content)
-                        .height(Fill)
-                        .on_action(Message::ActionPerformed)
-                        .wrapping(if self.word_wrap {
-                            text::Wrapping::Word
-                        } else {
-                            text::Wrapping::None
-                        })
-                        .key_binding(|key_press| {
-                            match key_press.key.as_ref() {
-                                keyboard::Key::Character("s") if key_press.modifiers.control() => {
-                                    debug!("CTRL + S pressed");
-                                    Some(text_editor::Binding::Custom(Message::SaveFile))
-                                }
-                                keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                                    debug!("ESC pressed");
-                                    Some(text_editor::Binding::Unfocus)
-                                }
-                                _ => text_editor::Binding::from_key_press(key_press),
-                            }
-                        }),
-                    status,
-                ]
-                .spacing(10)
-                .padding(10),
-            );
-
-            base.into()
+            column![content].into()
         } else {
             column![].into()
         }
