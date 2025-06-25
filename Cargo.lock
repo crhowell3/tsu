@@ -999,6 +999,7 @@ name = "data"
 version = "0.1.0"
 dependencies = [
  "dirs-next",
+ "flate2",
  "futures",
  "iced_core 0.14.0-dev",
  "itertools 0.14.0",

@@ -67,6 +67,42 @@ impl Pane {
             config,
         );
 
+        let status = row![
+            text(if let Some(path) = &self.file {
+                let path = path.display().to_string();
+
+                if path.len() > 60 {
+                    format!("...{}", &path[path.len() - 40..])
+                } else {
+                    path
+                }
+            } else {
+                String::from("New file")
+            }),
+            horizontal_space(),
+            text({
+                let (line, column) = self.content.cursor_position();
+
+                format!("{}:{}", line + 1, column + 1)
+            })
+        ]
+        .spacing(10);
+
+        let editor_pane = container(
+            column![
+                text_editor(&self.content)
+                    .height(Length::Fill)
+                    .wrapping(if self.word_wrap {
+                        text::Wrapping::Word
+                    } else {
+                        text::Wrapping::None
+                    }),
+                status,
+            ]
+            .spacing(10)
+            .padding(10),
+        );
+
         let content = self
             .buffer
             .view(

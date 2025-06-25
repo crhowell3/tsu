@@ -49,49 +49,69 @@ pub enum Event {
 }
 
 impl Editor {
+    pub fn view_window<'a>(
+        &'a self,
+        window: window::Id,
+        config: &'a Config,
+        theme: &'a Theme
+    ) -> Element<'a, Message> {
+        if let Some(state) = self.panes.popout.get(&window) {
+            let content = container(PaneGrid::new(state, |id, pane, _maximized| {
+                let is_focused = self.focus == Focus {
+                    window, pane: id};
+                    let editor = pane.editor;
+
+                    pane.view(
+                        id, 1, is_focused, false, config, theme, settings, window != self.main_window(),
+                    )
+                })
+                .spacing(4)
+                .on_click(pane::Message::PaneClicked),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(8);
+
+        return Element::new(content).map(move |message| Message::Pane(window, message));
+        } else if let Some(editor) = self.theme_editor.as_ref() {
+            if editor.window == window {
+                return editor.view(theme).map(Message::ThemeEditor);
+            }
+        }
+
+        column![].into()
+    }
     pub fn view<'a>(&'a self, config: &'a Config, theme: &'a Theme) -> Element<'a, Message> {
-        let status = row![
-            text(if let Some(path) = &self.file {
-                let path = path.display().to_string();
+        let pane_grid: Element<_> =
+        PaneGrid::new(&self.panes.main, |id, pane, maximized| {
+            let is_focused = self.focus == Focus {
+                window: self.main_window(),
+                pane: id,
+            };
+            let panes = self.panes.main.panes.len();
+            let editor = pane.editor;
 
-                if path.len() > 60 {
-                    format!("...{}", &path[path.len() - 40..])
-                } else {
-                    path
-                }
-            } else {
-                String::from("New file")
-            }),
-            horizontal_space(),
-            text({
-                let (line, column) = self.content.cursor_position();
+            pane.view(id, panes, is_focused, maximized, config, theme, false)
+        })
+        .on_click(pane::Message::PaneClicked)
+        .on_resize(6, pane::Message::PaneResized)
+        .on_drag(pane::Message::PaneDragged)
+        .spacing(4)
+        .into();
 
-                format!("{}:{}", line + 1, column + 1)
-            })
-        ]
-        .spacing(10);
-
-        let editor_pane = container(
-            column![
-                text_editor(&self.content)
-                    .height(Fill)
-                    .wrapping(if self.word_wrap {
-                        text::Wrapping::Word
-                    } else {
-                        text::Wrapping::None
-                    })
-                status,
-            ]
-            .spacing(10)
-            .padding(10),
-        );
+        let pane_grid = container(pane_grid.map(move |message| {
+            Message::Pane(self.main_window(), message)
+        }))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(8);
 
         let side_menu = self.side_menu.view(config).map(|e| e.map(Message::Sidebar));
         let content = match config.sidebar.position {
             data::config::sidebar::Position::Left => {
                 vec![
                     side_menu.unwrap_or_else(|| row![].into()),
-                    editor_pane.into(),
+                    pane_grid.into(),
                 ]
             }
         };
@@ -191,11 +211,50 @@ impl Editor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Focus {
     pub window: window::Id,
+    pub pane: pane_grid::Pane,
 }
 
 impl<'a> From<&'a Editor> for data::Editor {
     fn from(editor: &'a Editor) -> Self {
-        data::Editor {}
+        use pane_grid::Node;
+
+        fn from_layout(
+            panes: &pane_grid::State<Pane>,
+            node: pane_grid::Node,
+        ) -> data::Pane {
+            match node {
+                Node::Split {
+                    axis, ratio, a, b, ..
+                } => data::Pane::Split {
+                    axis: match axis {
+                        pane_grid::Axis::Horizontal => {
+                            data::pane::Axis::Horizontal
+                        }
+                        pane_grid::Axis::Vertical => data::pane::Axis::Vertical,
+                    },
+                    ratio,
+                    a: Box::new(from_layout(panes, *a)),
+                    b: Box::new(from_layout(panes, *b)),
+                },
+                Node::Pane(pane) => panes
+                    .get(pane)
+                    .cloned()
+                    .map_or(data::Pane::Empty, data::Pane::from),
+            }
+        }
+
+        let layout = editor.panes.main.layout().clone();
+        let focus = editor.focus;
+
+        data::Editor {
+            pane: from_layout(&editor.panes.main, layout),
+            popout_panes: editor
+                .panes
+                .popout
+                .values()
+                .map(|state| from_layout(state, state.layout().clone()))
+                .collect(),
+        }
     }
 }
 
