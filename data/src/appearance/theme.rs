@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 
 use iced_core::Color;
+use palette::rgb::{Rgb, Rgba};
+use palette::{FromColor, Hsva, Okhsl, Srgba};
+use rand::prelude::*;
+use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::fs;
@@ -107,10 +111,6 @@ pub struct Text {
     pub error: Color,
 }
 
-fn default_transparent() -> Color {
-    Color::TRANSPARENT
-}
-
 impl Default for Colors {
     fn default() -> Self {
         toml::from_str(DEFAULT_THEME_CONTENT).expect("parse default theme")
@@ -166,6 +166,90 @@ pub fn color_to_hex(color: Color) -> String {
     }
 
     hex
+}
+
+pub fn alpha_color_calculate(
+    min_alpha: f32,
+    max_alpha: f32,
+    background: Color,
+    foreground: Color,
+) -> Color {
+    alpha_color(
+        foreground,
+        min_alpha + to_hsl(background).lightness * (max_alpha - min_alpha),
+    )
+}
+
+pub fn randomize_color(original_color: Color, seed: &str) -> Color {
+    let seed_hash = seahash::hash(seed.as_bytes());
+
+    let mut rng = ChaChaRng::seed_from_u64(seed_hash);
+
+    // Convert the original color to HSL
+    let original_hsl = to_hsl(original_color);
+
+    let randomized_hue: f32 = rng.random_range(0.0..=360.0);
+    let randomized_hsl = Okhsl::new(
+        randomized_hue,
+        original_hsl.saturation,
+        original_hsl.lightness,
+    );
+
+    from_hsl(randomized_hsl)
+}
+
+pub fn to_hsl(color: Color) -> Okhsl {
+    let mut hsl = Okhsl::from_color(to_rgb(color));
+    if hsl.saturation.is_nan() {
+        hsl.saturation = Okhsl::max_saturation();
+    }
+
+    hsl
+}
+
+pub fn to_hsva(color: Color) -> Hsva {
+    Hsva::from_color(to_rgba(color))
+}
+
+pub fn from_hsva(color: Hsva) -> Color {
+    to_color(Srgba::from_color(color))
+}
+
+pub fn from_hsl(hsl: Okhsl) -> Color {
+    to_color(Srgba::from_color(hsl))
+}
+
+pub fn alpha_color(color: Color, alpha: f32) -> Color {
+    Color { a: alpha, ..color }
+}
+
+fn default_transparent() -> Color {
+    Color::TRANSPARENT
+}
+
+fn to_rgb(color: Color) -> Rgb {
+    Rgb {
+        red: color.r,
+        green: color.g,
+        blue: color.b,
+        ..Rgb::default()
+    }
+}
+
+fn to_rgba(color: Color) -> Rgba {
+    Rgba {
+        alpha: color.a,
+        color: to_rgb(color),
+    }
+}
+
+fn to_color(rgba: Rgba) -> Color {
+    Color {
+        r: rgba.color.red,
+        g: rgba.color.green,
+        b: rgba.color.blue,
+        a: rgba.alpha,
+    }
 }
 
 mod color_serde {

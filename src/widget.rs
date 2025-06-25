@@ -1,19 +1,25 @@
 #![allow(dead_code)]
 
+pub use self::anchored_overlay::anchored_overlay;
 pub use self::combo_box::combo_box;
 pub use self::context_menu::context_menu;
 pub use self::decorate::decorate;
 pub use self::double_pass::double_pass;
-pub use self::modal::modal;
+pub use self::key_press::key_press;
+pub use self::shortcut::shortcut;
 use crate::Theme;
 
+pub mod anchored_overlay;
+pub mod color_picker;
 pub mod combo_box;
 pub mod context_menu;
 pub mod decorate;
 pub mod double_pass;
-pub mod modal;
+pub mod key_press;
 pub mod selectable_rich_text;
 pub mod selectable_text;
+pub mod shortcut;
+pub mod tooltip;
 
 pub type Renderer = iced::Renderer;
 pub type Element<'a, Message> = iced::Element<'a, Message, Theme, Renderer>;

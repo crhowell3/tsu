@@ -4,7 +4,6 @@ use iced::{Subscription, event, keyboard, mouse, window};
 pub enum Event {
     Escape,
     LeftClick,
-    OpenControlPalette,
 }
 
 pub fn events() -> Subscription<(window::Id, Event)> {
@@ -25,13 +24,6 @@ fn filtered_events(
         }) => Some(Event::Escape),
         iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if ignored(status) => {
             Some(Event::LeftClick)
-        }
-        iced::Event::Keyboard(keyboard::Event::KeyPressed {
-            key: keyboard::Key::Character(p),
-            modifiers,
-            ..
-        }) if p.as_str() == "p" && modifiers.command() && modifiers.shift() => {
-            Some(Event::OpenControlPalette)
         }
         _ => None,
     };
