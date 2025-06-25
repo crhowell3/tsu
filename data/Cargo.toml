@@ -14,7 +14,11 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "fs"] }
 tokio-stream = { workspace = true, features = ["time", "fs"] }
 itertools = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
 palette = { workspace = true }
+
+seahash = "4.1.0"
 
 dirs-next = "2.0.0"
 serde_json = "1.0"

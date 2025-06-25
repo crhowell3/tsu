@@ -5,9 +5,10 @@ use chrono::{DateTime, Utc};
 use data::environment::{RELEASE_WEBSITE};
 use data::{Config, command, config, environment};
 use iced::widget::pane_grid::{self, PaneGrid};
-use iced::widget::{Space, column, container, row};
+use iced::widget::{column, container, horizontal_space, row, text, text_editor, Space};
 use iced::window::get_position;
 use iced::{Length, Task, Vector, clipboard};
+use iced::keyboard;
 
 use self::command_palette::CommandPalette;
 use self::sidebar::Sidebar;
@@ -17,6 +18,7 @@ use crate::window::Window;
 use crate::{Theme, event, theme, window};
 
 mod command_palette;
+pub mod pane;
 pub mod sidebar;
 mod theme_editor;
 
@@ -73,25 +75,11 @@ impl Editor {
             column![
                 text_editor(&self.content)
                     .height(Fill)
-                    .on_action(Message::ActionPerformed)
                     .wrapping(if self.word_wrap {
                         text::Wrapping::Word
                     } else {
                         text::Wrapping::None
                     })
-                    .key_binding(|key_press| {
-                        match key_press.key.as_ref() {
-                            keyboard::Key::Character("s") if key_press.modifiers.control() => {
-                                debug!("CTRL + S pressed");
-                                Some(text_editor::Binding::Custom(Message::SaveFile))
-                            }
-                            keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                                debug!("ESC pressed");
-                                Some(text_editor::Binding::Unfocus)
-                            }
-                            _ => text_editor::Binding::from_key_press(key_press),
-                        }
-                    }),
                 status,
             ]
             .spacing(10)

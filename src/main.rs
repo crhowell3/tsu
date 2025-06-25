@@ -20,7 +20,7 @@ use data::environment;
 use iced::Length;
 use iced::keyboard;
 use iced::padding;
-use iced::widget::{column, container, horizontal_space, row, text, text_editor};
+use iced::widget::{column, container, text_editor};
 use iced::{Fill, Subscription, Task};
 use tokio::runtime;
 use tracing::{debug, error, info};

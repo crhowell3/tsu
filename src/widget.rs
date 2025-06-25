@@ -10,6 +10,7 @@ pub use self::shortcut::shortcut;
 use crate::Theme;
 
 pub mod anchored_overlay;
+pub mod color_picker;
 pub mod combo_box;
 pub mod context_menu;
 pub mod decorate;
@@ -18,6 +19,7 @@ pub mod key_press;
 pub mod selectable_rich_text;
 pub mod selectable_text;
 pub mod shortcut;
+pub mod tooltip;
 
 pub type Renderer = iced::Renderer;
 pub type Element<'a, Message> = iced::Element<'a, Message, Theme, Renderer>;
