@@ -88,7 +88,6 @@ pub enum Event {
 #[derive(Debug, Clone)]
 pub enum Command {
     Application(Application),
-    Version(Version),
     Configuration(Configuration),
     UI(Ui),
     Theme(Theme),
@@ -98,11 +97,6 @@ pub enum Command {
 #[derive(Debug, Clone)]
 pub enum Application {
     Quit,
-}
-
-#[derive(Debug, Clone)]
-pub enum Version {
-    Application(data::Version),
 }
 
 #[derive(Debug, Clone)]
@@ -133,12 +127,7 @@ pub enum Theme {
 }
 
 impl Command {
-    pub fn list(
-        config: &Config,
-        focus: Focus,
-        version: &data::Version,
-        main_window: window::Id,
-    ) -> Vec<Self> {
+    pub fn list(config: &Config, focus: Focus, main_window: window::Id) -> Vec<Self> {
         let configs = Configuration::list()
             .into_iter()
             .map(Command::Configuration);
@@ -149,12 +138,9 @@ impl Command {
 
         let themes = Theme::list(config).into_iter().map(Command::Theme);
 
-        let version = Version::list(version).into_iter().map(Command::Version);
-
         let application = Application::list().into_iter().map(Command::Application);
 
-        version
-            .chain(application)
+        application
             .chain(configs)
             .chain(themes)
             .chain(uis)
@@ -171,9 +157,6 @@ impl std::fmt::Display for Command {
             }
             Command::UI(ui) => write!(f, "UI: {ui}"),
             Command::Theme(theme) => write!(f, "Theme: {theme}"),
-            Command::Version(application) => {
-                write!(f, "Version: {application}")
-            }
             Command::Window(window) => write!(f, "Window: {window}"),
             Command::Application(application) => {
                 write!(f, "Application: {application}")
@@ -185,12 +168,6 @@ impl std::fmt::Display for Command {
 impl Application {
     fn list() -> Vec<Self> {
         vec![Application::Quit]
-    }
-}
-
-impl Version {
-    fn list(version: &data::Version) -> Vec<Self> {
-        vec![Version::Application(version.clone())]
     }
 }
 
@@ -241,24 +218,6 @@ impl std::fmt::Display for Window {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Window::ToggleFullscreen => write!(f, "Toggle Fullscreen"),
-        }
-    }
-}
-
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Version::Application(version) => {
-                let latest = version
-                    .remote
-                    .as_ref()
-                    .filter(|remote| remote != &&version.current)
-                    .map_or("(Latest release)".to_owned(), |remote| {
-                        format!("(Latest: {remote})")
-                    });
-
-                write!(f, "{} {}", version.current, latest)
-            }
         }
     }
 }

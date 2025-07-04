@@ -8,12 +8,14 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReadDirStream;
 
 pub use self::keys::Keyboard;
+pub use self::sidebar::Sidebar;
 use crate::appearance::theme::Colors;
 use crate::appearance::{self, Appearance};
 use crate::environment::config_dir;
 use crate::{Theme, environment};
 
 pub mod keys;
+pub mod sidebar;
 
 const CONFIG_TEMPLATE: &str = include_str!("../../config.toml");
 const DEFAULT_THEME_NAME: &str = "gruvbox";
@@ -22,6 +24,7 @@ const DEFAULT_THEME_NAME: &str = "gruvbox";
 pub struct Config {
     pub appearance: Appearance,
     pub font: Font,
+    pub sidebar: Sidebar,
     pub keyboard: Keyboard,
 }
 
@@ -146,6 +149,8 @@ impl Config {
             #[serde(default)]
             pub font: Font,
             #[serde(default)]
+            pub sidebar: Sidebar,
+            #[serde(default)]
             pub keyboard: Keyboard,
         }
 
@@ -162,6 +167,7 @@ impl Config {
         let Configuration {
             theme,
             font,
+            sidebar,
             keyboard,
         } = toml::from_str(content.as_ref()).map_err(|e| Error::Parse(e.to_string()))?;
 
@@ -172,6 +178,7 @@ impl Config {
         Ok(Config {
             appearance,
             font,
+            sidebar,
             keyboard,
         })
     }

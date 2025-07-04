@@ -18,12 +18,11 @@ use clap::Parser;
 use data::config::{self, Config};
 use data::environment;
 use iced::Length;
-use iced::keyboard;
 use iced::padding;
 use iced::widget::{column, container, text_editor};
 use iced::{Fill, Subscription, Task};
 use tokio::runtime;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use self::event::{Event, events};
 use self::widget::Element;

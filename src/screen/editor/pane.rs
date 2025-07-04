@@ -1,4 +1,4 @@
-use data::{Config, file_transfer, history, preview};
+use data::Config;
 use iced::widget::{button, center, container, pane_grid, row, text};
 
 use super::sidebar;
@@ -45,7 +45,6 @@ impl Pane {
         panes: usize,
         is_focused: bool,
         maximized: bool,
-        previews: &'a preview::Collection,
         sidebar: &'a sidebar::Sidebar,
         config: &'a Config,
         theme: &'a Theme,
