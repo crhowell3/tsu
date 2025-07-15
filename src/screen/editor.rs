@@ -68,6 +68,7 @@ impl Editor {
                         1,
                         is_focused,
                         false,
+                        sidebar,
                         config,
                         theme,
                         settings,

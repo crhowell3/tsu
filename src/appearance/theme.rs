@@ -1,4 +1,6 @@
-pub use data::appearance::theme::Colors;
+pub use data::appearance::theme::{
+    Button, Buttons, Colors, General, Text, color_to_hex, hex_to_color,
+};
 
 use crate::widget::combo_box;
 

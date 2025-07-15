@@ -2,7 +2,7 @@ use data::Config;
 use iced::widget::{button, center, container, pane_grid, row, text};
 
 use super::sidebar;
-use crate::widget::tooltip;
+use crate::widget::{TextEditor, tooltip};
 use crate::{Theme, icon, theme, widget};
 
 #[derive(Debug, Clone)]
@@ -23,16 +23,16 @@ pub enum Message {
 }
 
 #[derive(Clone, Debug)]
-pub struct Pane {
-    pub text_editor: TextEditor,
+pub struct Pane<'a> {
+    pub text_editor: TextEditor<'a>,
     title_bar: TitleBar,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct TitleBar {}
 
-impl Pane {
-    pub fn new(text_editor: TextEditor) -> Self {
+impl<'a> Pane<'a> {
+    pub fn new(text_editor: TextEditor<'a>) -> Self {
         Self {
             text_editor,
             title_bar: TitleBar::default(),
@@ -59,7 +59,6 @@ impl Pane {
             panes,
             is_focused,
             maximized,
-            clients,
             settings,
             config.tooltips,
             is_popout,
@@ -104,17 +103,7 @@ impl Pane {
 
         let content = self
             .buffer
-            .view(
-                clients,
-                file_transfers,
-                history,
-                previews,
-                settings,
-                config,
-                theme,
-                is_focused,
-                sidebar,
-            )
+            .view(settings, config, theme, is_focused, sidebar)
             .map(move |msg| Message::Buffer(id, msg));
 
         widget::Content::new(content)
@@ -138,99 +127,6 @@ impl TitleBar {
     ) -> widget::TitleBar<'a, Message> {
         // Pane controls.
         let mut controls = row![].spacing(2);
-
-        if maybe_buffer_kind.is_some() {
-            let mark_as_read_button = button(center(icon::mark_as_read()))
-                .padding(5)
-                .width(22)
-                .height(22)
-                .on_press_maybe(can_mark_as_read.then_some(Message::MarkAsRead))
-                .style(move |theme, status| theme::button::secondary(theme, status, false));
-
-            let mark_as_read_button_with_tooltip = tooltip(
-                mark_as_read_button,
-                show_tooltips.then_some(if can_mark_as_read {
-                    "Mark messages as read"
-                } else {
-                    "No unread messages"
-                }),
-                tooltip::Position::Bottom,
-            );
-
-            controls = controls.push(mark_as_read_button_with_tooltip);
-        }
-
-        let can_scroll_to_bottom = !buffer.is_scrolled_to_bottom().unwrap_or_default();
-
-        let scroll_to_bottom_button = button(center(icon::scroll_to_bottom()))
-            .padding(5)
-            .width(22)
-            .height(22)
-            .on_press_maybe(can_scroll_to_bottom.then_some(Message::ScrollToBottom))
-            .style(|theme, status| theme::button::secondary(theme, status, false));
-
-        let scroll_to_bottom_button_with_tooltip = tooltip(
-            scroll_to_bottom_button,
-            show_tooltips.then_some(if can_scroll_to_bottom {
-                "Scroll to bottom"
-            } else {
-                "Already at bottom"
-            }),
-            tooltip::Position::Bottom,
-        );
-
-        controls = controls.push(scroll_to_bottom_button_with_tooltip);
-
-        if let Buffer::Channel(state) = &buffer {
-            // Show topic button only if there is a topic to show
-            if let Some(topic) = clients.get_channel_topic(&state.server, &state.target) {
-                if topic.content.is_some() {
-                    let topic_enabled = settings
-                        .map_or(config.buffer.channel.topic.enabled, |settings| {
-                            settings.channel.topic.enabled
-                        });
-
-                    let topic_button = button(center(icon::topic()))
-                        .padding(5)
-                        .width(22)
-                        .height(22)
-                        .on_press(Message::ToggleShowTopic)
-                        .style(move |theme, status| {
-                            theme::button::secondary(theme, status, topic_enabled)
-                        });
-
-                    let topic_button_with_tooltip = tooltip(
-                        topic_button,
-                        show_tooltips.then_some("Topic Banner"),
-                        tooltip::Position::Bottom,
-                    );
-
-                    controls = controls.push(topic_button_with_tooltip);
-                }
-            }
-
-            let nicklist_enabled = settings
-                .map_or(config.buffer.channel.nicklist.enabled, |settings| {
-                    settings.channel.nicklist.enabled
-                });
-
-            let nicklist_button = button(center(icon::people()))
-                .padding(5)
-                .width(22)
-                .height(22)
-                .on_press(Message::ToggleShowUserList)
-                .style(move |theme, status| {
-                    theme::button::secondary(theme, status, nicklist_enabled)
-                });
-
-            let nicklist_button_with_tooltip = tooltip(
-                nicklist_button,
-                show_tooltips.then_some("Nicklist"),
-                tooltip::Position::Bottom,
-            );
-
-            controls = controls.push(nicklist_button_with_tooltip);
-        }
 
         // If we have more than one pane open, show maximize button.
         if panes > 1 {
@@ -289,32 +185,10 @@ impl TitleBar {
             controls = controls.push(close_button_with_tooltip);
         }
 
-        // Add delete as long as it's not a single empty buffer
-        if !(is_popout || panes == 1 && matches!(buffer, Buffer::Empty)) {
-            let close_button = button(center(icon::cancel()))
-                .padding(5)
-                .width(22)
-                .height(22)
-                .on_press(Message::ClosePane)
-                .style(|theme, status| theme::button::secondary(theme, status, false));
-
-            let close_button_with_tooltip = tooltip(
-                close_button,
-                show_tooltips.then_some("Close"),
-                tooltip::Position::Bottom,
-            );
-
-            controls = controls.push(close_button_with_tooltip);
-        }
-
-        let title = container(
-            text(value)
-                .style(theme::text::buffer_title_bar)
-                .shaping(text::Shaping::Advanced),
-        )
-        .height(22)
-        .padding([0, 10])
-        .align_y(iced::alignment::Vertical::Center);
+        let title = container(text(value).shaping(text::Shaping::Advanced))
+            .height(22)
+            .padding([0, 10])
+            .align_y(iced::alignment::Vertical::Center);
 
         widget::TitleBar::new(title)
             .controls(pane_grid::Controls::new(controls))
@@ -324,20 +198,7 @@ impl TitleBar {
 
 impl From<Pane> for data::Pane {
     fn from(pane: Pane) -> Self {
-        let buffer = match pane.buffer {
-            Buffer::Empty => return data::Pane::Empty,
-            Buffer::Channel(state) => {
-                data::Buffer::Upstream(buffer::Upstream::Channel(state.server, state.target))
-            }
-            Buffer::Server(state) => data::Buffer::Upstream(buffer::Upstream::Server(state.server)),
-            Buffer::Query(state) => {
-                data::Buffer::Upstream(buffer::Upstream::Query(state.server, state.target))
-            }
-            Buffer::FileTransfers(_) => data::Buffer::Internal(buffer::Internal::FileTransfers),
-            Buffer::Logs(_) => data::Buffer::Internal(buffer::Internal::Logs),
-            Buffer::Highlights(_) => data::Buffer::Internal(buffer::Internal::Highlights),
-        };
-
-        data::Pane::Buffer { buffer }
+        let _ = pane;
+        data::Pane::Empty
     }
 }

@@ -4,6 +4,14 @@ use iced::widget::text::LineHeight;
 use crate::widget::Text;
 use crate::{font, theme};
 
+pub fn dot<'a>() -> Text<'a> {
+    to_text('\u{F111}')
+}
+
+pub fn error<'a>() -> Text<'a> {
+    to_text('\u{E80D}')
+}
+
 pub fn new_icon<'a>() -> Text<'a> {
     to_text('\u{0e800}')
 }
@@ -14,6 +22,26 @@ pub fn save_icon<'a>() -> Text<'a> {
 
 pub fn open_icon<'a>() -> Text<'a> {
     to_text('\u{0f115}')
+}
+
+pub fn checkmark<'a>() -> Text<'a> {
+    to_text('\u{E806}')
+}
+
+pub fn theme_editor<'a>() -> Text<'a> {
+    to_text('\u{E80A}')
+}
+
+pub fn undo<'a>() -> Text<'a> {
+    to_text('\u{E80B}')
+}
+
+pub fn copy<'a>() -> Text<'a> {
+    to_text('\u{F0C5}')
+}
+
+pub fn config<'a>() -> Text<'a> {
+    to_text('\u{F1C9}')
 }
 
 fn to_text<'a>(unicode: char) -> Text<'a> {

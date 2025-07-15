@@ -22,7 +22,7 @@ use iced::padding;
 use iced::widget::{column, container, text_editor};
 use iced::{Fill, Subscription, Task};
 use tokio::runtime;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use self::event::{Event, events};
 use self::widget::Element;

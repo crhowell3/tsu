@@ -2,13 +2,15 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use data::Config;
-use data::appearance::theme::Button;
+use futures::TryFutureExt;
 use iced::Length::*;
 use iced::alignment::Vertical;
 use iced::widget::text::LineHeight;
 use iced::widget::{button, center, column, container, row, text_input};
-use iced::{Color, Length, Task, Vector, alignment, clipboard};
+use iced::{Color, Length, Task, Vector, alignment};
+use strum::IntoEnumIterator;
 use tokio::time;
+use tracing::{debug, error};
 
 use crate::theme::{self, Colors, Theme};
 use crate::widget::{Element, color_picker, combo_box, tooltip};
@@ -31,8 +33,6 @@ pub enum Message {
     Discard,
     Revert,
     Clear,
-    Copy,
-    Share,
     SavePath(Option<PathBuf>),
     Saved(Result<(), String>),
     ClearSaveResult,
@@ -148,25 +148,6 @@ impl ThemeEditor {
 
                 *theme = theme.preview(data::Theme::new("Custom Theme".into(), colors));
             }
-            Message::Copy => {
-                self.copied = true;
-
-                let url = url::theme(theme.colors());
-
-                return (
-                    Task::batch(vec![
-                        clipboard::write(url),
-                        Task::perform(time::sleep(Duration::from_secs(2)), |()| Message::ClearCopy),
-                    ]),
-                    None,
-                );
-            }
-            Message::Share => {
-                let url = url::theme_submit(theme.colors());
-                let _ = open::that_detached(url);
-
-                return (Task::none(), None);
-            }
             Message::SavePath(None) => {}
             Message::SavePath(Some(path)) => {
                 debug!("Saving theme to {path:?}");
@@ -253,12 +234,6 @@ impl ThemeEditor {
         };
         let apply = secondary_button("Apply Colors", Message::Apply);
 
-        let copy = if self.copied {
-            success_icon()
-        } else {
-            icon(icon::copy(), "Copy Theme to URL", Message::Copy)
-        };
-
         let color_picker = color_picker(color, Message::Color);
 
         let content = column![
@@ -266,7 +241,6 @@ impl ThemeEditor {
                 container(component).width(Fill),
                 container(hex_input).width(80),
                 undo,
-                copy,
             ]
             .align_y(Vertical::Center)
             .spacing(4),
@@ -341,16 +315,6 @@ fn components() -> impl Iterator<Item = Component> {
     General::iter()
         .map(Component::General)
         .chain(Text::iter().map(Component::Text))
-        .chain(
-            Buffer::iter()
-                .filter(|buffer| !matches!(buffer, Buffer::ServerMessages(_)))
-                .map(Component::Buffer),
-        )
-        .chain(
-            ServerMessages::iter()
-                .map(Buffer::ServerMessages)
-                .map(Component::Buffer),
-        )
         .chain(Button::iter().map(Buttons::Primary).map(Component::Buttons))
         .chain(
             Button::iter()
@@ -480,7 +444,7 @@ impl Buttons {
     fn color(&self, colors: &theme::Buttons) -> Color {
         match self {
             Buttons::Primary(button) => button.color(&colors.primary),
-            Buttons::Secondary(button) => buttons.color(&colors.secondary),
+            Buttons::Secondary(button) => button.color(&colors.secondary),
         }
     }
 
