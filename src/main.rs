@@ -121,8 +121,8 @@ fn settings(config_load: &Result<Config, config::Error>) -> iced::Settings {
     }
 }
 
-struct Tsu {
-    screen: Screen,
+struct Tsu<'a> {
+    screen: Screen<'a>,
     theme: Theme,
     config: Config,
     main_window: Window,
@@ -133,8 +133,8 @@ struct Tsu {
     is_dirty: bool,
 }
 
-pub enum Screen {
-    Editor(screen::Editor),
+pub enum Screen<'a> {
+    Editor(screen::Editor<'a>),
 }
 
 #[derive(Debug, Clone)]
@@ -150,7 +150,7 @@ pub enum Message {
     FileSaved(Result<PathBuf, Error>),
 }
 
-impl Tsu {
+impl<'a> Tsu<'a> {
     fn new(
         filename: String,
         window_load: Result<data::Window, window::Error>,

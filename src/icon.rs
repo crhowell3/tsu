@@ -24,6 +24,14 @@ pub fn open_icon<'a>() -> Text<'a> {
     to_text('\u{0f115}')
 }
 
+pub fn maximize<'a>() -> Text<'a> {
+    to_text('\u{E801}')
+}
+
+pub fn restore<'a>() -> Text<'a> {
+    to_text('\u{E805}')
+}
+
 pub fn checkmark<'a>() -> Text<'a> {
     to_text('\u{E806}')
 }
@@ -38,6 +46,10 @@ pub fn undo<'a>() -> Text<'a> {
 
 pub fn copy<'a>() -> Text<'a> {
     to_text('\u{F0C5}')
+}
+
+pub fn popout<'a>() -> Text<'a> {
+    to_text('\u{E80E}')
 }
 
 pub fn config<'a>() -> Text<'a> {

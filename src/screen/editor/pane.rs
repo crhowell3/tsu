@@ -1,7 +1,8 @@
 use data::Config;
-use iced::widget::{button, center, container, pane_grid, row, text};
+use iced::widget::{button, center, container, horizontal_space, pane_grid, row, text};
 
 use super::sidebar;
+use crate::appearance::theme::text_editor;
 use crate::widget::{TextEditor, tooltip};
 use crate::{Theme, icon, theme, widget};
 
@@ -39,7 +40,7 @@ impl<'a> Pane<'a> {
         }
     }
 
-    pub fn view<'a>(
+    pub fn view(
         &'a self,
         id: pane_grid::Pane,
         panes: usize,
@@ -54,7 +55,7 @@ impl<'a> Pane<'a> {
         let title_bar_text = "File";
 
         let title_bar = self.title_bar.view(
-            title_bar_text,
+            title_bar_text.to_owned(),
             id,
             panes,
             is_focused,
@@ -79,7 +80,7 @@ impl<'a> Pane<'a> {
             }),
             horizontal_space(),
             text({
-                let (line, column) = self.content.cursor_position();
+                let (line, column) = self.text_editor.cursor_position();
 
                 format!("{}:{}", line + 1, column + 1)
             })
@@ -102,9 +103,9 @@ impl<'a> Pane<'a> {
         );
 
         let content = self
-            .buffer
+            .text_editor
             .view(settings, config, theme, is_focused, sidebar)
-            .map(move |msg| Message::Buffer(id, msg));
+            .map(move |msg| Message::TextEditor(id));
 
         widget::Content::new(content)
             .style(move |theme| theme::container::buffer(theme, is_focused))
@@ -120,7 +121,7 @@ impl TitleBar {
         panes: usize,
         _is_focused: bool,
         maximized: bool,
-        settings: Option<&'a buffer::Settings>,
+        settings: Option<&'a text_editor::Settings>,
         show_tooltips: bool,
         is_popout: bool,
         config: &'a Config,
@@ -196,7 +197,7 @@ impl TitleBar {
     }
 }
 
-impl From<Pane> for data::Pane {
+impl<'a> From<Pane<'a>> for data::Pane {
     fn from(pane: Pane) -> Self {
         let _ = pane;
         data::Pane::Empty

@@ -1,22 +1,17 @@
-use std::collections::{HashMap, HashSet, VecDeque, hash_map};
-use std::path::PathBuf;
-use std::{convert, slice};
+use std::collections::HashMap;
+use std::convert;
 
 use chrono::{DateTime, Utc};
-use data::environment::RELEASE_WEBSITE;
-use data::{Config, command, config, environment};
-use iced::keyboard;
+use data::{Config, config};
 use iced::widget::pane_grid::{self, PaneGrid};
-use iced::widget::{Space, column, container, horizontal_space, row, text, text_editor};
-use iced::window::get_position;
-use iced::{Length, Task, Vector, clipboard};
+use iced::widget::{Space, column, container, row};
+use iced::{Length, Task};
 
 use self::command_palette::CommandPalette;
 use self::pane::Pane;
 use self::sidebar::Sidebar;
 use self::theme_editor::ThemeEditor;
-use crate::widget::{Column, Element, Row, anchored_overlay, shortcut};
-use crate::window::Window;
+use crate::widget::{Column, Element, anchored_overlay, context_menu, shortcut};
 use crate::{Theme, event, theme, window};
 
 mod command_palette;
@@ -24,8 +19,8 @@ pub mod pane;
 pub mod sidebar;
 mod theme_editor;
 
-pub struct Editor {
-    panes: Panes,
+pub struct Editor<'a> {
+    panes: Panes<'a>,
     focus: Focus,
     side_menu: Sidebar,
     command_palette: Option<CommandPalette>,
@@ -33,14 +28,14 @@ pub struct Editor {
 }
 
 #[derive(Debug)]
-pub enum Message {
+pub enum Message<'a> {
     Pane(window::Id, pane::Message),
     Sidebar(sidebar::Message),
     Task(command_palette::Message),
     Shortcut(shortcut::Command),
     CloseContextMenu(window::Id, bool),
     ThemeEditor(theme_editor::Message),
-    NewWindow(window::Id, Pane),
+    NewWindow(window::Id, Pane<'a>),
 }
 
 #[derive(Debug)]
@@ -50,8 +45,8 @@ pub enum Event {
     Exit,
 }
 
-impl Editor {
-    pub fn view_window<'a>(
+impl<'a> Editor<'a> {
+    pub fn view_window(
         &'a self,
         window: window::Id,
         config: &'a Config,
@@ -62,13 +57,14 @@ impl Editor {
                 PaneGrid::new(state, |id, pane, _maximized| {
                     let is_focused = self.focus == Focus { window, pane: id };
                     let editor = pane.text_editor;
+                    let settings = editor.as_ref().and_then(|b| self.editor_settings.get(b));
 
                     pane.view(
                         id,
                         1,
                         is_focused,
                         false,
-                        sidebar,
+                        &self.side_menu,
                         config,
                         theme,
                         settings,
@@ -91,7 +87,7 @@ impl Editor {
 
         column![].into()
     }
-    pub fn view<'a>(&'a self, config: &'a Config, theme: &'a Theme) -> Element<'a, Message> {
+    pub fn view(&'a self, config: &'a Config, theme: &'a Theme) -> Element<'a, Message> {
         let pane_grid: Element<_> = PaneGrid::new(&self.panes.main, |id, pane, maximized| {
             let is_focused = self.focus
                 == Focus {
@@ -99,9 +95,20 @@ impl Editor {
                     pane: id,
                 };
             let panes = self.panes.main.panes.len();
-            let editor = pane.editor;
+            let editor = pane.text_editor;
+            let settings = editor.as_ref().and_then(|b| self.editor_settings.get(b));
 
-            pane.view(id, panes, is_focused, maximized, config, theme, false)
+            pane.view(
+                id,
+                panes,
+                is_focused,
+                maximized,
+                &self.side_menu,
+                config,
+                theme,
+                settings,
+                false,
+            )
         })
         .on_click(pane::Message::PaneClicked)
         .on_resize(6, pane::Message::PaneResized)
@@ -115,7 +122,10 @@ impl Editor {
                 .height(Length::Fill)
                 .padding(8);
 
-        let side_menu = self.side_menu.view(config).map(|e| e.map(Message::Sidebar));
+        let side_menu = self
+            .side_menu
+            .view(&self.panes, self.focus, config)
+            .map(|e| e.map(Message::Sidebar));
         let content = vec![side_menu.unwrap_or_else(|| row![].into()), pane_grid.into()];
 
         let base: Element<Message> = Column::with_children(content)
@@ -203,7 +213,7 @@ pub struct Focus {
     pub pane: pane_grid::Pane,
 }
 
-impl<'a> From<&'a Editor> for data::Editor {
+impl<'a> From<&'a Editor<'a>> for data::Editor {
     fn from(editor: &'a Editor) -> Self {
         use pane_grid::Node;
 
@@ -243,18 +253,18 @@ impl<'a> From<&'a Editor> for data::Editor {
 }
 
 #[derive(Clone)]
-pub struct Panes {
+pub struct Panes<'a> {
     main_window: window::Id,
-    main: pane_grid::State<Pane>,
-    popout: HashMap<window::Id, pane_grid::State<Pane>>,
+    main: pane_grid::State<Pane<'a>>,
+    popout: HashMap<window::Id, pane_grid::State<Pane<'a>>>,
 }
 
-impl Panes {
+impl<'a> Panes<'a> {
     fn len(&self) -> usize {
         self.main.panes.len() + self.popout.len()
     }
 
-    fn get(&self, window: window::Id, pane: pane_grid::Pane) -> Option<&Pane> {
+    fn get(&self, window: window::Id, pane: pane_grid::Pane) -> Option<&Pane<'a>> {
         if self.main_window == window {
             self.main.get(pane)
         } else {
@@ -262,7 +272,7 @@ impl Panes {
         }
     }
 
-    fn get_mut(&mut self, window: window::Id, pane: pane_grid::Pane) -> Option<&mut Pane> {
+    fn get_mut(&mut self, window: window::Id, pane: pane_grid::Pane) -> Option<&mut Pane<'a>> {
         if self.main_window == window {
             self.main.get_mut(pane)
         } else {
@@ -272,7 +282,7 @@ impl Panes {
         }
     }
 
-    fn iter(&self) -> impl Iterator<Item = (window::Id, pane_grid::Pane, &Pane)> {
+    fn iter(&self) -> impl Iterator<Item = (window::Id, pane_grid::Pane, &Pane<'a>)> {
         self.main
             .iter()
             .map(move |(pane, state)| (self.main_window, *pane, state))
@@ -281,7 +291,7 @@ impl Panes {
             }))
     }
 
-    fn iter_mut(&mut self) -> impl Iterator<Item = (window::Id, pane_grid::Pane, &mut Pane)> {
+    fn iter_mut(&mut self) -> impl Iterator<Item = (window::Id, pane_grid::Pane, &mut Pane<'a>)> {
         let main_window = self.main_window;
 
         self.main
@@ -292,13 +302,5 @@ impl Panes {
                     .iter_mut()
                     .map(|(pane, state)| (*window_id, *pane, state))
             }))
-    }
-
-    fn resources(&self) -> impl Iterator<Item = data::history::Resource> + '_ {
-        self.main.panes.values().filter_map(Pane::resource).chain(
-            self.popout
-                .values()
-                .flat_map(|state| state.panes.values().filter_map(Pane::resource)),
-        )
     }
 }
