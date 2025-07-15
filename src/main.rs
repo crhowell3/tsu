@@ -24,6 +24,8 @@ use iced::{Fill, Subscription, Task};
 use tokio::runtime;
 use tracing::{error, info, warn};
 
+use crate::screen::editor;
+
 use self::event::{Event, events};
 use self::widget::Element;
 use self::window::Window;
@@ -138,8 +140,9 @@ pub enum Screen<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Message {
+pub enum Message<'a> {
     ActionPerformed(text_editor::Action),
+    Editor(editor::Message<'a>),
     ThemeSelected(Theme),
     Event(window::Id, Event),
     Window(window::Id, window::Event),
@@ -155,7 +158,7 @@ impl<'a> Tsu<'a> {
         filename: String,
         window_load: Result<data::Window, window::Error>,
         config_load: Result<Config, config::Error>,
-    ) -> (Self, Task<Message>) {
+    ) -> (Self, Task<Message<'a>>) {
         let data::Window { size, position } = window_load.unwrap_or_default();
         let position = position.map(window::Position::Specific).unwrap_or_default();
 

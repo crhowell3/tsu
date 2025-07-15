@@ -1,5 +1,5 @@
 use data::Config;
-use iced::widget::{button, center, container, horizontal_space, pane_grid, row, text};
+use iced::widget::{button, center, column, container, horizontal_space, pane_grid, row, text};
 
 use super::sidebar;
 use crate::appearance::theme::text_editor;

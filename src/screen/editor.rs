@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::convert;
 
-use chrono::{DateTime, Utc};
 use data::{Config, config};
 use iced::widget::pane_grid::{self, PaneGrid};
 use iced::widget::{Space, column, container, row};
@@ -11,7 +10,8 @@ use self::command_palette::CommandPalette;
 use self::pane::Pane;
 use self::sidebar::Sidebar;
 use self::theme_editor::ThemeEditor;
-use crate::widget::{Column, Element, anchored_overlay, context_menu, shortcut};
+use crate::widget::{Column, Element, TextEditor, anchored_overlay, context_menu, shortcut};
+use crate::window::Window;
 use crate::{Theme, event, theme, window};
 
 mod command_palette;
@@ -27,7 +27,7 @@ pub struct Editor<'a> {
     theme_editor: Option<ThemeEditor>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Message<'a> {
     Pane(window::Id, pane::Message),
     Sidebar(sidebar::Message),
@@ -46,6 +46,27 @@ pub enum Event {
 }
 
 impl<'a> Editor<'a> {
+    pub fn empty(config: &Config, main_window: &Window) -> (Self, Task<Message<'a>>) {
+        let (main_panes, pane) = pane_grid::State::new(Pane::new(TextEditor::Empty));
+
+        let mut editor = Editor {
+            panes: Panes {
+                main_window: main_window.id,
+                main: main_panes,
+                popout: HashMap::new(),
+            },
+            focus: Focus {
+                window: main_window.id,
+                pane,
+            },
+            side_menu: Sidebar::new(),
+            command_palette: None,
+            theme_editor: None,
+        };
+
+        (editor, Task::none())
+    }
+
     pub fn view_window(
         &'a self,
         window: window::Id,

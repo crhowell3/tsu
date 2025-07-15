@@ -26,6 +26,7 @@ pub struct Config {
     pub font: Font,
     pub sidebar: Sidebar,
     pub keyboard: Keyboard,
+    pub tooltips: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -152,6 +153,8 @@ impl Config {
             pub sidebar: Sidebar,
             #[serde(default)]
             pub keyboard: Keyboard,
+            #[serde(default = "default_tooltip")]
+            pub tooltips: bool,
         }
 
         let path = Self::path();
@@ -169,6 +172,7 @@ impl Config {
             font,
             sidebar,
             keyboard,
+            tooltips,
         } = toml::from_str(content.as_ref()).map_err(|e| Error::Parse(e.to_string()))?;
 
         let appearance = Self::load_appearance(theme.keys())
@@ -180,6 +184,7 @@ impl Config {
             font,
             sidebar,
             keyboard,
+            tooltips,
         })
     }
 
