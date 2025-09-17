@@ -1,27 +1,10 @@
 [package]
 name = "tsu"
 version = "0.1.0"
-authors = ["Cameron Howell <jango.djarin@proton.me>"]
+authors = ["Cameron Howell <me@crhowell.com>"]
 edition = "2024"
 publish = false
 
 [dependencies]
-iced = { version = "0.14.0-dev", default-features = false, features = [
-    "wgpu",
-    "tiny-skia",
-    "fira-sans",
-    "tokio",
-    "lazy",
-    "advanced",
-    "image",
-    "highlighter",
-] }
-iced_core = "0.13.2"
-rfd = "0.15.3"
-tokio = {version = "1.45.1", features = ["fs"] }
-tracing = "0.1.41"
-tracing-subscriber = {version = "0.3.19", features = ["env-filter"] }
-
-[patch.crates-io]
-iced = { git = "https://github.com/iced-rs/iced", rev = "aa633f6832c93d81fc829bcd351b369f0aada282" }
-iced_core = { git = "https://github.com/iced-rs/iced", rev = "aa633f6832c93d81fc829bcd351b369f0aada282" }
+anyhow = "1.0.99"
+crossterm = "0.29.0"

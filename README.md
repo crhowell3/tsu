@@ -42,7 +42,7 @@
 
 ## 💭 About
 
-text editor for linux
+modal text editor for linux
 
 <p align="center">
   Copyright &copy; 2025-present

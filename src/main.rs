@@ -1,352 +1,105 @@
-use iced::highlighter;
-use iced::keyboard;
-use iced::widget::{
-    self, button, center_x, column, container, horizontal_space, pick_list, row,
-    text, text_editor, tooltip,
-};
-use iced::{Center, Element, Fill, Font, Task, Theme};
+use std::io::{self, Write, stdout};
 
-use tracing::{debug, info};
-use tracing_subscriber;
+use crossterm::{ExecutableCommand, QueueableCommand, cursor, event, style, terminal};
 
-use std::env;
-use std::ffi;
-use std::io;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-
-pub fn main() -> iced::Result {
-    let default_level = "info";
-
-    let user_level = env::args()
-        .nth(1)
-        .unwrap_or_else(|| default_level.to_string());
-
-    let crate_name = env!("CARGO_CRATE_NAME");
-    let filter = tracing_subscriber::EnvFilter::new(format!("{}={}", crate_name, user_level));
-
-    tracing_subscriber::fmt::fmt()
-        .with_env_filter(filter)
-        .init();
-    info!("Starting iced application");
-    iced::application(Tsu::new, Tsu::update, Tsu::view)
-        .theme(Tsu::theme)
-        .title(Tsu::title)
-        .font(include_bytes!("../fonts/icons.ttf").as_slice())
-        .default_font(Font::MONOSPACE)
-        .run()
+#[derive(Debug, PartialEq, Eq)]
+enum Action {
+    MoveUp,
+    MoveDown,
+    MoveLeft,
+    MoveRight,
+    EnterMode(Mode),
+    Quit,
 }
 
-struct Tsu {
-    file: Option<PathBuf>,
-    content: text_editor::Content,
-    theme: highlighter::Theme,
-    word_wrap: bool,
-    is_loading: bool,
-    is_dirty: bool,
-    command_palette_open: bool,
+#[derive(Debug, PartialEq, Eq)]
+enum Mode {
+    Normal,
+    Insert,
 }
 
-#[derive(Debug, Clone)]
-enum Message {
-    ActionPerformed(text_editor::Action),
-    ThemeSelected(highlighter::Theme),
-    NewFile,
-    OpenFile,
-    FileOpened(Result<(PathBuf, Arc<String>), Error>),
-    SaveFile,
-    FileSaved(Result<PathBuf, Error>),
-    Noop,
-}
-
-impl Tsu {
-    fn new() -> (Self, Task<Message>) {
-        (
-            Self {
-                file: None,
-                content: text_editor::Content::new(),
-                theme: highlighter::Theme::SolarizedDark,
-                word_wrap: true,
-                is_loading: true,
-                is_dirty: false,
-                command_palette_open: false,
-            },
-            Task::batch([
-                Task::perform(
-                    load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
-                    Message::FileOpened,
-                ),
-                widget::focus_next(),
-            ]),
-        )
+fn handle_event(
+    mode: &Mode,
+    stdout: &mut io::Stdout,
+    ev: event::Event,
+) -> anyhow::Result<Option<Action>> {
+    match mode {
+        Mode::Normal => handle_normal_event(ev),
+        Mode::Insert => handle_insert_event(stdout, ev),
     }
+}
 
-    fn title(&self) -> String {
-        String::from("tsu")
+fn handle_normal_event(ev: event::Event) -> anyhow::Result<Option<Action>> {
+    match ev {
+        event::Event::Key(event) => match event.code {
+            event::KeyCode::Char('q') => Ok(Some(Action::Quit)),
+            event::KeyCode::Up | event::KeyCode::Char('k') => Ok(Some(Action::MoveUp)),
+            event::KeyCode::Down | event::KeyCode::Char('j') => Ok(Some(Action::MoveDown)),
+            event::KeyCode::Left | event::KeyCode::Char('h') => Ok(Some(Action::MoveLeft)),
+            event::KeyCode::Right | event::KeyCode::Char('l') => Ok(Some(Action::MoveRight)),
+            event::KeyCode::Char('i') => Ok(Some(Action::EnterMode(Mode::Insert))),
+            _ => Ok(None),
+        },
+        _ => Ok(None),
     }
+}
 
-    fn update(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::ActionPerformed(action) => {
-                self.is_dirty = self.is_dirty || action.is_edit();
-
-                self.content.perform(action);
-
-                Task::none()
+fn handle_insert_event(
+    stdout: &mut io::Stdout,
+    ev: event::Event,
+) -> anyhow::Result<Option<Action>> {
+    match ev {
+        event::Event::Key(event) => match event.code {
+            event::KeyCode::Esc => Ok(Some(Action::EnterMode(Mode::Normal))),
+            event::KeyCode::Char(c) => {
+                stdout.queue(style::Print(c))?;
+                Ok(None)
             }
-            Message::ThemeSelected(theme) => {
-                self.theme = theme;
+            _ => Ok(None),
+        },
+        _ => Ok(None),
+    }
+}
 
-                Task::none()
-            }
-            Message::NewFile => {
-                if !self.is_loading {
-                    self.file = None;
-                    self.content = text_editor::Content::new();
+fn main() -> anyhow::Result<()> {
+    let mut stdout = stdout();
+    let mut current_mode = Mode::Normal;
+    let mut pos_x = 0;
+    let mut pos_y = 0;
+
+    terminal::enable_raw_mode()?;
+    stdout.execute(terminal::EnterAlternateScreen)?;
+
+    stdout.execute(terminal::Clear(terminal::ClearType::All))?;
+
+    loop {
+        stdout.queue(cursor::MoveTo(pos_x, pos_y))?;
+        stdout.flush()?;
+
+        if let Some(action) = handle_event(&current_mode, &mut stdout, event::read()?)? {
+            match action {
+                Action::Quit => break,
+                Action::MoveUp => {
+                    pos_y = pos_y.saturating_sub(1);
                 }
-
-                Task::none()
-            }
-            Message::OpenFile => {
-                if self.is_loading {
-                    Task::none()
-                } else {
-                    self.is_loading = true;
-
-                    Task::perform(open_file(), Message::FileOpened)
+                Action::MoveDown => {
+                    pos_y += 1u16;
                 }
-            }
-            Message::FileOpened(result) => {
-                self.is_loading = false;
-                self.is_dirty = false;
-
-                if let Ok((path, contents)) = result {
-                    self.file = Some(path);
-                    self.content = text_editor::Content::with_text(&contents);
+                Action::MoveLeft => {
+                    pos_x = pos_x.saturating_sub(1);
                 }
-
-                Task::none()
-            }
-            Message::SaveFile => {
-                if self.is_loading {
-                    Task::none()
-                } else {
-                    self.is_loading = true;
-
-                    let mut text = self.content.text();
-
-                    if let Some(ending) = self.content.line_ending() {
-                        if !text.ends_with(ending.as_str()) {
-                            text.push_str(ending.as_str());
-                        }
-                    }
-
-                    Task::perform(save_file(self.file.clone(), text), Message::FileSaved)
+                Action::MoveRight => {
+                    pos_x += 1u16;
+                }
+                Action::EnterMode(mode) => {
+                    current_mode = mode;
                 }
             }
-            Message::FileSaved(result) => {
-                self.is_loading = false;
-
-                if let Ok(path) = result {
-                    self.file = Some(path);
-                    self.is_dirty = false;
-                }
-
-                Task::none()
-            }
-            Message::Noop => Task::none(),
         }
     }
 
-    fn view(&self) -> Element<Message> {
-        let controls = row![
-            action(new_icon(), "New file", Some(Message::NewFile)),
-            action(
-                open_icon(),
-                "Open file",
-                (!self.is_loading).then_some(Message::OpenFile)
-            ),
-            action(
-                save_icon(),
-                "Save file",
-                self.is_dirty.then_some(Message::SaveFile)
-            ),
-            horizontal_space(),
-            pick_list(
-                highlighter::Theme::ALL,
-                Some(self.theme),
-                Message::ThemeSelected
-            )
-            .text_size(14)
-            .padding([5, 10])
-        ]
-        .spacing(10)
-        .align_y(Center);
+    stdout.execute(terminal::LeaveAlternateScreen)?;
+    terminal::disable_raw_mode()?;
 
-        let status = row![
-            text(if let Some(path) = &self.file {
-                let path = path.display().to_string();
-
-                if path.len() > 60 {
-                    format!("...{}", &path[path.len() - 40..])
-                } else {
-                    path
-                }
-            } else {
-                String::from("New file")
-            }),
-            horizontal_space(),
-            text({
-                let (line, column) = self.content.cursor_position();
-
-                format!("{}:{}", line + 1, column + 1)
-            })
-        ]
-        .spacing(10);
-
-        let base = column![
-            controls,
-            text_editor(&self.content)
-                .height(Fill)
-                .on_action(Message::ActionPerformed)
-                .wrapping(if self.word_wrap {
-                    text::Wrapping::Word
-                } else {
-                    text::Wrapping::None
-                })
-                .highlight(
-                    self.file
-                        .as_deref()
-                        .and_then(Path::extension)
-                        .and_then(ffi::OsStr::to_str)
-                        .unwrap_or("rs"),
-                    self.theme,
-                )
-                .key_binding(|key_press| {
-                    match key_press.key.as_ref() {
-                        keyboard::Key::Character("s") if key_press.modifiers.control() => {
-                            debug!("CTRL + S pressed");
-                            Some(text_editor::Binding::Custom(Message::SaveFile))
-                        }
-                        keyboard::Key::Named(keyboard::key::Named::Escape) => {
-                            debug!("ESC pressed");
-                            Some(text_editor::Binding::Unfocus)
-                        }
-                        keyboard::Key::Character("p")
-                            if key_press.modifiers.shift() && key_press.modifiers.control() =>
-                        {
-                            debug!("CTRL + SHIFT + P pressed");
-                            Some(text_editor::Binding::Custom(Message::Noop))
-                        }
-                        _ => text_editor::Binding::from_key_press(key_press),
-                    }
-                }),
-            status,
-        ]
-        .spacing(10)
-        .padding(10);
-
-        if self.command_palette_open {
-            // let oly = column![Text::new("Command Palette").size(20),]
-            //     .spacing(10)
-            //     .padding(20)
-            //     .max_width(400);
-            base.into()
-        } else {
-            base.into()
-        }
-    }
-
-    fn theme(&self) -> Theme {
-        if self.theme.is_dark() {
-            Theme::Dark
-        } else {
-            Theme::Light
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Error {
-    DialogClosed,
-    IoError(io::ErrorKind),
-}
-
-async fn open_file() -> Result<(PathBuf, Arc<String>), Error> {
-    let picked_file = rfd::AsyncFileDialog::new()
-        .set_title("Open a text file")
-        .pick_file()
-        .await
-        .ok_or(Error::DialogClosed)?;
-
-    load_file(picked_file).await
-}
-
-async fn load_file(path: impl Into<PathBuf>) -> Result<(PathBuf, Arc<String>), Error> {
-    let path = path.into();
-
-    let contents = tokio::fs::read_to_string(&path)
-        .await
-        .map(Arc::new)
-        .map_err(|error| Error::IoError(error.kind()))?;
-
-    Ok((path, contents))
-}
-
-async fn save_file(path: Option<PathBuf>, contents: String) -> Result<PathBuf, Error> {
-    let path = if let Some(path) = path {
-        path
-    } else {
-        rfd::AsyncFileDialog::new()
-            .save_file()
-            .await
-            .as_ref()
-            .map(rfd::FileHandle::path)
-            .map(Path::to_owned)
-            .ok_or(Error::DialogClosed)?
-    };
-
-    tokio::fs::write(&path, contents)
-        .await
-        .map_err(|error| Error::IoError(error.kind()))?;
-
-    Ok(path)
-}
-
-fn action<'a, Message: Clone + 'a>(
-    content: impl Into<Element<'a, Message>>,
-    label: &'a str,
-    on_press: Option<Message>,
-) -> Element<'a, Message> {
-    let action = button(center_x(content).width(30));
-
-    if let Some(on_press) = on_press {
-        tooltip(
-            action.on_press(on_press),
-            label,
-            tooltip::Position::FollowCursor,
-        )
-        .style(container::rounded_box)
-        .into()
-    } else {
-        action.style(button::secondary).into()
-    }
-}
-
-fn new_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e800}')
-}
-
-fn save_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0e801}')
-}
-
-fn open_icon<'a, Message>() -> Element<'a, Message> {
-    icon('\u{0f115}')
-}
-
-fn icon<'a, Message>(codepoint: char) -> Element<'a, Message> {
-    const ICON_FONT: Font = Font::with_name("editor-icons");
-
-    text(codepoint).font(ICON_FONT).into()
+    Ok(())
 }
