@@ -3,7 +3,8 @@ use std::io::Write;
 use crossterm::{
     ExecutableCommand, QueueableCommand, cursor,
     event::{self, read},
-    style, terminal,
+    style::{self, Color, Stylize},
+    terminal,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -76,9 +77,98 @@ impl Editor {
     }
 
     pub fn draw_status_line(&mut self) -> anyhow::Result<()> {
+        let left_separator = "";
+        let right_separator = "";
+        let mode_str = format!(" {:?} ", self.mode).to_uppercase();
+        let file_str = " src/main.rs ";
+        let position_str = format!(" {}:{} ", self.pos_y, self.pos_x);
+
+        // Calculate file string width dynamically
+        let file_str_width = self.size.0
+            - mode_str.len() as u16
+            - position_str.len() as u16
+            - left_separator.len() as u16
+            - right_separator.len() as u16;
+
         self.stdout.queue(cursor::MoveTo(0, self.size.1 - 2))?;
-        self.stdout
-            .queue(style::Print(format!(" {:?} ", self.mode)))?;
+
+        // Editor mode
+        self.stdout.queue(style::PrintStyledContent(
+            mode_str
+                .with(Color::Rgb {
+                    r: 26,
+                    g: 27,
+                    b: 38,
+                })
+                .bold()
+                .on(Color::Rgb {
+                    r: 187,
+                    g: 154,
+                    b: 247,
+                }),
+        ))?;
+
+        // Section separator
+        self.stdout.queue(style::PrintStyledContent(
+            left_separator
+                .with(Color::Rgb {
+                    r: 187,
+                    g: 154,
+                    b: 247,
+                })
+                .on(Color::Rgb {
+                    r: 65,
+                    g: 72,
+                    b: 104,
+                }),
+        ))?;
+
+        // File name
+        self.stdout.queue(style::PrintStyledContent(
+            format!("{:<width$}", file_str, width = file_str_width as usize)
+                .with(Color::Rgb {
+                    r: 192,
+                    g: 202,
+                    b: 245,
+                })
+                .bold()
+                .on(Color::Rgb {
+                    r: 65,
+                    g: 72,
+                    b: 104,
+                }),
+        ))?;
+
+        // Section separator
+        self.stdout.queue(style::PrintStyledContent(
+            right_separator
+                .with(Color::Rgb {
+                    r: 187,
+                    g: 154,
+                    b: 247,
+                })
+                .on(Color::Rgb {
+                    r: 65,
+                    g: 72,
+                    b: 104,
+                }),
+        ))?;
+
+        // Cursor position
+        self.stdout.queue(style::PrintStyledContent(
+            position_str
+                .with(Color::Rgb {
+                    r: 26,
+                    g: 27,
+                    b: 38,
+                })
+                .bold()
+                .on(Color::Rgb {
+                    r: 187,
+                    g: 154,
+                    b: 247,
+                }),
+        ))?;
 
         Ok(())
     }
@@ -124,6 +214,9 @@ impl Editor {
     }
 
     fn handle_event(&mut self, ev: event::Event) -> anyhow::Result<Option<Action>> {
+        if matches!(ev, event::Event::Resize(_, _)) {
+            self.size = terminal::size()?;
+        }
         match self.mode {
             Mode::Normal => self.handle_normal_event(ev),
             Mode::Insert => self.handle_insert_event(ev),
