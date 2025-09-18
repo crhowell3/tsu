@@ -1,11 +1,9 @@
-mod editor;
-
 use crate::editor::Editor;
 
+mod editor;
+
 fn main() -> anyhow::Result<()> {
-    let editor = Editor::new();
+    let mut editor = Editor::new()?;
 
-    editor.unwrap().run()?;
-
-    Ok(())
+    editor.run()
 }
