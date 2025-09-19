@@ -538,6 +538,7 @@ dependencies = [
  "anyhow",
  "clap",
  "crossterm",
+ "once_cell",
  "tracing",
  "tracing-subscriber",
 ]
