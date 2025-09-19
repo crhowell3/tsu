@@ -11,6 +11,11 @@ use crate::{buffer::Buffer, log};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Action {
+    // Buffer actions
+    Save,
+    Quit,
+    Undo,
+
     // Movement
     MoveUp,
     MoveDown,
@@ -18,9 +23,12 @@ enum Action {
     MoveRight,
     MoveToLineEnd,
     MoveToLineStart,
+    PageUp,
+    PageDown,
 
     // Text editing
     InsertCharAtCursor(char),
+    InsertLineAt(usize, Option<String>),
     NewLine,
     DeleteCharAtCursor,
     DeleteCurrentLine,
@@ -28,10 +36,88 @@ enum Action {
     // Misc
     EnterMode(Mode),
     SetComboCommand(char),
+}
 
-    // Buffer actions
-    Save,
-    Quit,
+impl Action {
+    pub fn execute(self, editor: &mut Editor) {
+        match self {
+            Action::Quit => {}
+            Action::Save => {}
+            Action::Undo => if let Some(undo_action) = editor.undoable_actions.pop() {},
+            Action::MoveUp => {
+                if editor.pos_y == 0 {
+                    if editor.vtop > 0 {
+                        editor.vtop -= 1;
+                    }
+                } else {
+                    editor.pos_y = editor.pos_y.saturating_sub(1);
+                }
+            }
+            Action::MoveDown => {
+                editor.pos_y += 1;
+                if editor.pos_y >= editor.vheight() {
+                    editor.vtop += 1;
+                    editor.pos_y -= 1;
+                }
+            }
+            Action::MoveLeft => {
+                _ = editor.pos_x.saturating_sub(1);
+                if editor.pos_x < editor.vleft {
+                    editor.pos_x = editor.vleft;
+                }
+            }
+            Action::MoveRight => {
+                editor.pos_x += 1;
+            }
+            Action::MoveToLineStart => {
+                editor.pos_x = 0;
+            }
+            Action::MoveToLineEnd => {
+                editor.pos_x = editor.line_length().saturating_sub(1);
+            }
+            Action::PageUp => {
+                if editor.vtop > 0 {
+                    editor.vtop = editor.vtop.saturating_sub(editor.vheight());
+                }
+            }
+            Action::PageDown => {
+                if editor.buffer.len() > (editor.vtop + editor.vheight()) as usize {
+                    editor.vtop += editor.vheight();
+                }
+            }
+            Action::EnterMode(mode) => {
+                editor.mode = mode;
+            }
+            Action::InsertCharAtCursor(c) => {
+                editor.buffer.insert(editor.pos_x, editor.buffer_line(), c);
+                editor.pos_x += 1;
+            }
+            Action::DeleteCharAtCursor => {
+                editor.buffer.remove(editor.pos_x, editor.buffer_line());
+            }
+            Action::NewLine => {
+                editor.pos_x = 0;
+                editor.pos_y += 1;
+            }
+            Action::InsertLineAt(line, contents) => {
+                if let Some(contents) = contents {
+                    editor.buffer.insert_line(line, contents);
+                }
+            }
+            Action::DeleteCurrentLine => {
+                let line = editor.buffer_line();
+                let contents = editor.current_line_contents();
+
+                editor.buffer.remove_line(editor.buffer_line());
+                editor
+                    .undoable_actions
+                    .push(Action::InsertLineAt(line, contents));
+            }
+            Action::SetComboCommand(cmd) => {
+                editor.combo_command = Some(cmd);
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -54,6 +140,7 @@ pub struct Editor {
     pos_y: u16,
     mode: Mode,
     combo_command: Option<char>,
+    undoable_actions: Vec<Action>,
 }
 
 impl Editor {
@@ -74,6 +161,7 @@ impl Editor {
             mode: Mode::Normal,
             size: terminal::size()?,
             combo_command: None,
+            undoable_actions: vec![],
         })
     }
 
@@ -92,8 +180,8 @@ impl Editor {
         0
     }
 
-    fn buffer_line(&self) -> u16 {
-        self.vtop + self.pos_y
+    fn buffer_line(&self) -> usize {
+        (self.vtop + self.pos_y) as usize
     }
 
     fn view_line(&self, n: u16) -> Option<String> {
@@ -101,7 +189,17 @@ impl Editor {
         self.buffer.get(line as usize)
     }
 
+    fn set_cursor_style(&mut self) -> anyhow::Result<()> {
+        self.stdout.queue(match self.combo_command {
+            Some(_) => cursor::SetCursorStyle::SteadyUnderScore,
+            _ => cursor::SetCursorStyle::DefaultUserShape,
+        })?;
+
+        Ok(())
+    }
+
     pub fn draw(&mut self) -> anyhow::Result<()> {
+        self.set_cursor_style()?;
         self.draw_view()?;
         self.draw_status_line()?;
         self.stdout.queue(cursor::MoveTo(self.pos_x, self.pos_y))?;
@@ -127,7 +225,11 @@ impl Editor {
         let right_separator = "";
         let mode_str = format!(" {:?} ", self.mode).to_uppercase();
         let file_str = format!(" {}", self.buffer.file.as_deref().unwrap_or("[No Name]"));
-        let position_str = format!(" {}:{} ", self.pos_y + 1, self.pos_x + 1);
+        let position_str = format!(
+            " {}:{} ",
+            self.pos_y + self.vtop + 1,
+            self.pos_x + self.vleft + 1
+        );
 
         // Calculate file string width dynamically
         let file_str_width = self.size.0
@@ -245,65 +347,12 @@ impl Editor {
             self.check_bounds();
             self.draw()?;
             if let Some(action) = self.handle_event(read()?)? {
-                match action {
-                    Action::Quit => break,
-                    Action::Save => break,
-                    Action::MoveUp => {
-                        if self.pos_y == 0 {
-                            if self.vtop > 0 {
-                                self.vtop -= 1;
-                            }
-                        } else {
-                            self.pos_y = self.pos_y.saturating_sub(1);
-                        }
-                    }
-                    Action::MoveDown => {
-                        self.pos_y += 1;
-                        if self.pos_y >= self.vheight() {
-                            self.vtop += 1;
-                            self.pos_y -= 1;
-                        }
-                    }
-                    Action::MoveLeft => {
-                        _ = self.pos_x.saturating_sub(1);
-                        if self.pos_x < self.vleft {
-                            self.pos_x = self.vleft;
-                        }
-                    }
-                    Action::MoveRight => {
-                        self.pos_x += 1;
-                    }
-                    Action::MoveToLineStart => {
-                        self.pos_x = 0;
-                    }
-                    Action::MoveToLineEnd => {
-                        self.pos_x = self.line_length().saturating_sub(1);
-                    }
-                    Action::EnterMode(mode) => {
-                        self.mode = mode;
-                    }
-                    Action::InsertCharAtCursor(c) => {
-                        self.buffer.insert(self.pos_x, self.buffer_line(), c);
-                        self.pos_x += 1;
-                    }
-                    Action::DeleteCharAtCursor => {
-                        self.buffer.remove(self.pos_x, self.buffer_line());
-                    }
-                    Action::NewLine => {
-                        self.pos_x = 0;
-                        self.pos_y += 1;
-                    }
-                    Action::DeleteCurrentLine => {
-                        self.buffer.remove_line(self.buffer_line());
-                    }
-                    Action::SetComboCommand(cmd) => {
-                        self.combo_command = Some(cmd);
-                    }
+                if matches!(action, Action::Quit) {
+                    break;
                 }
+                action.execute(self);
             }
         }
-        self.stdout.execute(terminal::LeaveAlternateScreen)?;
-        terminal::disable_raw_mode()?;
 
         Ok(())
     }
@@ -340,7 +389,10 @@ impl Editor {
                 event::KeyCode::Home => Ok(Some(Action::MoveToLineStart)),
                 event::KeyCode::End => Ok(Some(Action::MoveToLineEnd)),
                 event::KeyCode::Delete => Ok(Some(Action::DeleteCharAtCursor)),
+                event::KeyCode::PageUp => Ok(Some(Action::PageUp)),
+                event::KeyCode::PageDown => Ok(Some(Action::PageDown)),
                 event::KeyCode::Char('d') => Ok(Some(Action::SetComboCommand('d'))),
+                event::KeyCode::Char('g') => Ok(Some(Action::SetComboCommand('g'))),
                 event::KeyCode::Char('i') => Ok(Some(Action::EnterMode(Mode::Insert))),
                 event::KeyCode::Char('v') => Ok(Some(Action::EnterMode(Mode::Visual))),
                 event::KeyCode::Char(':') => Ok(Some(Action::EnterMode(Mode::Command))),
@@ -356,6 +408,14 @@ impl Editor {
             'd' => match ev {
                 event::Event::Key(event) => match event.code {
                     event::KeyCode::Char('d') => Some(Action::DeleteCurrentLine),
+                    _ => None,
+                },
+                _ => None,
+            },
+            'g' => match ev {
+                event::Event::Key(event) => match event.code {
+                    event::KeyCode::Char('h') => Some(Action::MoveToLineStart),
+                    event::KeyCode::Char('l') => Some(Action::MoveToLineEnd),
                     _ => None,
                 },
                 _ => None,
@@ -412,5 +472,9 @@ impl Editor {
         terminal::disable_raw_mode()?;
 
         Ok(())
+    }
+
+    fn current_line_contents(&self) -> Option<String> {
+        self.buffer.get(self.buffer_line())
     }
 }

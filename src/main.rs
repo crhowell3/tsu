@@ -26,9 +26,9 @@ macro_rules! log {
 #[clap(name = "tsu")]
 #[command(
     version,
-    about,
+    about = "A vimlike modal text editor.",
     author = "Cameron Howell <me@crhowell.com>",
-    display_name = "tsu",
+    display_name = "tsu ツ",
     help_template = "{name} {version}
 author: {author-with-newline}{about-with-newline}
 {usage-heading} {usage}
