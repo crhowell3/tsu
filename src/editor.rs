@@ -7,12 +7,16 @@ use crossterm::{
     terminal,
 };
 
+use tree_sitter::{Parser, Query, QueryCursor};
+use tree_sitter_rust::HIGHLIGHT_QUERY;
+
 use crate::{buffer::Buffer, log};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Action {
     // Buffer actions
     Quit,
+    WriteFile,
     Undo,
     UndoMultiple(Vec<Action>),
     CenterView,
@@ -49,6 +53,9 @@ impl Action {
     pub fn execute(&self, editor: &mut Editor) {
         match self {
             Action::Quit => {}
+            Action::WriteFile => {
+                unimplemented!()
+            }
             Action::Undo => {
                 if let Some(undoable_action) = editor.undoable_actions.pop() {
                     undoable_action.execute(editor);
@@ -224,6 +231,13 @@ pub enum Mode {
 }
 
 #[derive(Debug)]
+pub struct ColorInfo {
+    start: usize,
+    end: usize,
+    color: Color,
+}
+
+#[derive(Debug)]
 pub struct Editor {
     buffer: Buffer,
     size: (u16, u16),
@@ -306,14 +320,97 @@ impl Editor {
         Ok(())
     }
 
-    pub fn draw_view(&mut self) -> anyhow::Result<()> {
-        let vwidth = self.vwidth() as usize;
-        for line_num in 0..self.vheight() {
-            let line = self.view_line(line_num).unwrap_or_default();
+    pub fn highlight(&self, code: &str) -> anyhow::Result<Vec<ColorInfo>> {
+        let mut parser = Parser::new();
+        let language = tree_sitter_rust::language();
+        parser.set_language(language)?;
 
-            self.stdout
-                .queue(cursor::MoveTo(0, line_num))?
-                .queue(style::Print(format!("{line:<width$}", width = vwidth)))?;
+        let tree = parser.parse(code, None).expect("parse works");
+        let query = Query::new(language, HIGHLIGHT_QUERY)?;
+
+        let mut colors = Vec::new();
+        let mut cursor = QueryCursor::new();
+        let matches = cursor.matches(&query, tree.root_node(), code.as_bytes());
+
+        for mat in matches {
+            for cap in mat.captures {
+                let node = cap.node;
+                let start = node.start_byte();
+                let end = node.end_byte();
+                let color = match query.capture_names()[cap.index as usize].as_str() {
+                    "function" => Some(Color::Blue),
+                    "number" => Some(Color::Rgb {
+                        r: 187,
+                        g: 154,
+                        b: 247,
+                    }),
+                    "comment.documentation" => Some(Color::Grey),
+                    "constant" => Some(Color::Rgb {
+                        r: 187,
+                        g: 154,
+                        b: 247,
+                    }),
+                    "operator" => Some(Color::Rgb {
+                        r: 187,
+                        g: 154,
+                        b: 247,
+                    }),
+                    "type" => Some(Color::Yellow),
+                    "keyword" => Some(Color::Red),
+                    "string" => Some(Color::Green),
+                    _ => None,
+                };
+                if let Some(color) = color {
+                    colors.push(ColorInfo { start, end, color })
+                }
+            }
+        }
+
+        Ok(colors)
+    }
+
+    pub fn draw_view(&mut self) -> anyhow::Result<()> {
+        let vbuffer = self.buffer.view(self.vtop, self.vheight() as usize);
+        let color_info = self.highlight(&vbuffer)?;
+        let vwidth = self.vwidth();
+        let vheight = self.vheight();
+
+        let mut x = 0;
+        let mut y = 0;
+        let mut color = None;
+
+        for (pos, c) in vbuffer.chars().enumerate() {
+            if c == '\n' {
+                self.stdout
+                    .queue(style::Print(" ".repeat((vwidth - x) as usize)))?;
+                y += 1;
+                if y > vheight {
+                    break;
+                }
+                x = 0;
+                continue;
+            }
+
+            if let Some(col) = color_info.iter().find(|ci| ci.start == pos) {
+                color = Some(col);
+            }
+            if color_info.iter().any(|ci| ci.end == pos) {
+                color = None;
+            }
+
+            self.stdout.queue(cursor::MoveTo(x, y))?;
+
+            match color {
+                Some(ci) => {
+                    self.stdout
+                        .queue(style::PrintStyledContent(c.to_string().with(ci.color)))?;
+                }
+                None => {
+                    self.stdout.queue(style::Print(c.to_string()))?;
+                }
+            };
+
+            x += 1;
         }
         Ok(())
     }
@@ -544,26 +641,31 @@ impl Editor {
     }
 
     fn handle_insert_event(&mut self, ev: event::Event) -> anyhow::Result<Option<Action>> {
-        match ev {
+        let action = match ev {
             event::Event::Key(event) => match event.code {
-                event::KeyCode::Esc => Ok(Some(Action::EnterMode(Mode::Normal))),
-                event::KeyCode::Char(c) => Ok(Some(Action::InsertCharAtCursor(c))),
-                event::KeyCode::Enter => Ok(Some(Action::NewLine)),
-                _ => Ok(None),
+                event::KeyCode::Esc => Some(Action::EnterMode(Mode::Normal)),
+                event::KeyCode::Char(c) => Some(Action::InsertCharAtCursor(c)),
+                event::KeyCode::Enter => Some(Action::NewLine),
+                _ => None,
             },
-            _ => Ok(None),
-        }
+            _ => None,
+        };
+
+        Ok(action)
     }
 
     fn handle_command_event(&mut self, ev: event::Event) -> anyhow::Result<Option<Action>> {
-        match ev {
+        let action = match ev {
             event::Event::Key(event) => match event.code {
-                event::KeyCode::Esc => Ok(Some(Action::EnterMode(Mode::Normal))),
-                event::KeyCode::Char('q') => Ok(Some(Action::Quit)),
-                _ => Ok(None),
+                event::KeyCode::Esc => Some(Action::EnterMode(Mode::Normal)),
+                event::KeyCode::Char('q') => Some(Action::Quit),
+                event::KeyCode::Char('w') => Some(Action::WriteFile),
+                _ => None,
             },
-            _ => Ok(None),
-        }
+            _ => None,
+        };
+
+        Ok(action)
     }
 
     fn handle_visual_event(&mut self, ev: event::Event) -> anyhow::Result<Option<Action>> {
