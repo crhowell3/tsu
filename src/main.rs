@@ -9,6 +9,7 @@ use std::{env, io::stdout, panic};
 mod buffer;
 mod editor;
 mod logger;
+mod theme;
 
 static LOGGER: OnceCell<Logger> = OnceCell::new();
 
