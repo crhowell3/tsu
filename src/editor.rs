@@ -15,6 +15,7 @@ enum Action {
     Save,
     Quit,
     Undo,
+    CenterView,
 
     // Movement
     MoveUp,
@@ -43,7 +44,32 @@ impl Action {
         match self {
             Action::Quit => {}
             Action::Save => {}
-            Action::Undo => if let Some(undo_action) = editor.undoable_actions.pop() {},
+            Action::Undo => {
+                if let Some(undoable_action) = editor.undoable_actions.pop() {
+                    undoable_action.execute(editor);
+                }
+            }
+            Action::CenterView => {
+                let view_center = editor.vheight() / 2;
+                let distance_to_center = editor.pos_y as isize - view_center as isize;
+
+                if distance_to_center > 0 {
+                    let distance_to_center = distance_to_center.unsigned_abs();
+                    if editor.vtop > distance_to_center {
+                        editor.vtop += distance_to_center;
+                        editor.pos_y = view_center;
+                    }
+                } else if distance_to_center < 0 {
+                    let distance_to_center = distance_to_center.unsigned_abs();
+                    let new_vtop = editor.vtop.saturating_sub(distance_to_center);
+                    if editor.buffer.len() > editor.vtop + distance_to_center
+                        && new_vtop != editor.vtop
+                    {
+                        editor.vtop = new_vtop;
+                        editor.pos_y = view_center;
+                    }
+                }
+            }
             Action::MoveUp => {
                 if editor.pos_y == 0 {
                     if editor.vtop > 0 {
@@ -77,12 +103,12 @@ impl Action {
             }
             Action::PageUp => {
                 if editor.vtop > 0 {
-                    editor.vtop = editor.vtop.saturating_sub(editor.vheight());
+                    editor.vtop = editor.vtop.saturating_sub(editor.vheight() as usize);
                 }
             }
             Action::PageDown => {
-                if editor.buffer.len() > (editor.vtop + editor.vheight()) as usize {
-                    editor.vtop += editor.vheight();
+                if editor.buffer.len() > (editor.vtop + editor.vheight() as usize) {
+                    editor.vtop += editor.vheight() as usize;
                 }
             }
             Action::EnterMode(mode) => {
@@ -134,7 +160,7 @@ pub struct Editor {
     buffer: Buffer,
     size: (u16, u16),
     stdout: std::io::Stdout,
-    vtop: u16,
+    vtop: usize,
     vleft: u16,
     pos_x: u16,
     pos_y: u16,
@@ -181,12 +207,12 @@ impl Editor {
     }
 
     fn buffer_line(&self) -> usize {
-        (self.vtop + self.pos_y) as usize
+        self.vtop + self.pos_y as usize
     }
 
     fn view_line(&self, n: u16) -> Option<String> {
-        let line = self.vtop + n;
-        self.buffer.get(line as usize)
+        let line = self.vtop + n as usize;
+        self.buffer.get(line)
     }
 
     fn set_cursor_style(&mut self) -> anyhow::Result<()> {
@@ -227,7 +253,7 @@ impl Editor {
         let file_str = format!(" {}", self.buffer.file.as_deref().unwrap_or("[No Name]"));
         let position_str = format!(
             " {}:{} ",
-            self.pos_y + self.vtop + 1,
+            self.pos_y as usize + self.vtop + 1,
             self.pos_x + self.vleft + 1
         );
 
@@ -336,9 +362,9 @@ impl Editor {
             self.pos_x = self.vwidth() - 1;
         }
 
-        let line_in_buffer = self.pos_y + self.vtop;
-        if line_in_buffer as usize > self.buffer.len() - 1 {
-            self.pos_y = self.buffer.len() as u16 - self.vtop - 1;
+        let line_in_buffer = self.pos_y as usize + self.vtop;
+        if line_in_buffer > self.buffer.len() - 1 {
+            self.pos_y = (self.buffer.len() - self.vtop - 1) as u16;
         }
     }
 
@@ -393,7 +419,9 @@ impl Editor {
                 event::KeyCode::PageDown => Ok(Some(Action::PageDown)),
                 event::KeyCode::Char('d') => Ok(Some(Action::SetComboCommand('d'))),
                 event::KeyCode::Char('g') => Ok(Some(Action::SetComboCommand('g'))),
+                event::KeyCode::Char('z') => Ok(Some(Action::SetComboCommand('z'))),
                 event::KeyCode::Char('i') => Ok(Some(Action::EnterMode(Mode::Insert))),
+                event::KeyCode::Char('u') => Ok(Some(Action::Undo)),
                 event::KeyCode::Char('v') => Ok(Some(Action::EnterMode(Mode::Visual))),
                 event::KeyCode::Char(':') => Ok(Some(Action::EnterMode(Mode::Command))),
                 event::KeyCode::Char('r') => Ok(Some(Action::EnterMode(Mode::Replace))),
@@ -416,6 +444,13 @@ impl Editor {
                 event::Event::Key(event) => match event.code {
                     event::KeyCode::Char('h') => Some(Action::MoveToLineStart),
                     event::KeyCode::Char('l') => Some(Action::MoveToLineEnd),
+                    _ => None,
+                },
+                _ => None,
+            },
+            'z' => match ev {
+                event::Event::Key(event) => match event.code {
+                    event::KeyCode::Char('z') => Some(Action::CenterView),
                     _ => None,
                 },
                 _ => None,
