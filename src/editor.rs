@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crossterm::{
     ExecutableCommand, QueueableCommand, cursor,
-    event::{self, KeyModifiers, read},
+    event::{self, read},
     style::{self, Color, Stylize},
     terminal,
 };
@@ -12,7 +12,6 @@ use crate::{buffer::Buffer, log};
 #[derive(Debug, PartialEq, Eq)]
 enum Action {
     // Buffer actions
-    Save,
     Quit,
     Undo,
     CenterView,
@@ -31,6 +30,7 @@ enum Action {
 
     // Text editing
     InsertCharAtCursor(char),
+    RemoveCharAt(u16, usize),
     InsertLineAbove,
     InsertLineBelow,
     InsertLineAt(usize, Option<String>),
@@ -47,7 +47,6 @@ impl Action {
     pub fn execute(self, editor: &mut Editor) {
         match self {
             Action::Quit => {}
-            Action::Save => {}
             Action::Undo => {
                 if let Some(undoable_action) = editor.undoable_actions.pop() {
                     undoable_action.execute(editor);
@@ -131,8 +130,14 @@ impl Action {
                 editor.mode = mode;
             }
             Action::InsertCharAtCursor(c) => {
+                editor
+                    .undoable_actions
+                    .push(Action::RemoveCharAt(editor.pos_x, editor.buffer_line()));
                 editor.buffer.insert(editor.pos_x, editor.buffer_line(), c);
                 editor.pos_x += 1;
+            }
+            Action::RemoveCharAt(x, y) => {
+                editor.buffer.remove(x, y);
             }
             Action::DeleteCharAtCursor => {
                 editor.buffer.remove(editor.pos_x, editor.buffer_line());
@@ -256,10 +261,12 @@ impl Editor {
     }
 
     pub fn draw(&mut self) -> anyhow::Result<()> {
-        self.set_cursor_style()?;
+        self.stdout.queue(cursor::Hide)?;
         self.draw_view()?;
         self.draw_status_line()?;
         self.stdout.queue(cursor::MoveTo(self.pos_x, self.pos_y))?;
+        self.set_cursor_style()?;
+        self.stdout.queue(cursor::Show)?;
         self.stdout.flush()?;
 
         Ok(())
