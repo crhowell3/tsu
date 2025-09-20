@@ -369,6 +369,28 @@ impl Editor {
         Ok(colors)
     }
 
+    fn print_char(
+        &mut self,
+        x: u16,
+        y: u16,
+        c: char,
+        color: Option<&ColorInfo>,
+    ) -> anyhow::Result<()> {
+        self.stdout.queue(cursor::MoveTo(x, y))?;
+
+        match color {
+            Some(ci) => {
+                self.stdout
+                    .queue(style::PrintStyledContent(c.to_string().with(ci.color)))?;
+            }
+            None => {
+                self.stdout.queue(style::Print(c.to_string()))?;
+            }
+        };
+
+        Ok(())
+    }
+
     pub fn draw_view(&mut self) -> anyhow::Result<()> {
         let vbuffer = self.buffer.view(self.vtop, self.vheight() as usize);
         let color_info = self.highlight(&vbuffer)?;
@@ -378,16 +400,21 @@ impl Editor {
         let mut x = 0;
         let mut y = 0;
         let mut color = None;
+        let mut iter = vbuffer.chars().enumerate().peekable();
 
-        for (pos, c) in vbuffer.chars().enumerate() {
-            if c == '\n' {
+        while let Some((pos, c)) = iter.next() {
+            if c == '\n' || iter.peek().is_none() {
+                if c != '\n' {
+                    self.print_char(x, y, c, color)?;
+                    x += 1;
+                }
                 self.stdout
                     .queue(style::Print(" ".repeat((vwidth - x) as usize)))?;
+                x = 0;
                 y += 1;
                 if y > vheight {
                     break;
                 }
-                x = 0;
                 continue;
             }
 
@@ -397,20 +424,15 @@ impl Editor {
             if color_info.iter().any(|ci| ci.end == pos) {
                 color = None;
             }
-
-            self.stdout.queue(cursor::MoveTo(x, y))?;
-
-            match color {
-                Some(ci) => {
-                    self.stdout
-                        .queue(style::PrintStyledContent(c.to_string().with(ci.color)))?;
-                }
-                None => {
-                    self.stdout.queue(style::Print(c.to_string()))?;
-                }
-            };
-
+            self.print_char(x, y, c, color)?;
             x += 1;
+        }
+
+        while y < vheight {
+            self.stdout.queue(cursor::MoveTo(0, y))?;
+            self.stdout
+                .queue(style::Print(" ".repeat(vwidth as usize)))?;
+            y += 1;
         }
         Ok(())
     }
