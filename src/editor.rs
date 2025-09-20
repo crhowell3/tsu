@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, mem};
 
 use crossterm::{
     ExecutableCommand, QueueableCommand, cursor,
@@ -14,6 +14,7 @@ enum Action {
     // Buffer actions
     Quit,
     Undo,
+    UndoMultiple(Vec<Action>),
     CenterView,
 
     // Movement
@@ -37,6 +38,7 @@ enum Action {
     NewLine,
     DeleteCharAtCursor,
     DeleteCurrentLine,
+    DeleteLineAt(usize),
 
     // Misc
     EnterMode(Mode),
@@ -44,12 +46,17 @@ enum Action {
 }
 
 impl Action {
-    pub fn execute(self, editor: &mut Editor) {
+    pub fn execute(&self, editor: &mut Editor) {
         match self {
             Action::Quit => {}
             Action::Undo => {
                 if let Some(undoable_action) = editor.undoable_actions.pop() {
                     undoable_action.execute(editor);
+                }
+            }
+            Action::UndoMultiple(actions) => {
+                for action in actions.iter().rev() {
+                    action.execute(editor);
                 }
             }
             Action::CenterView => {
@@ -126,23 +133,39 @@ impl Action {
                     editor.vtop += editor.vheight() as usize;
                 }
             }
-            Action::EnterMode(mode) => {
-                editor.mode = mode;
+            Action::EnterMode(new_mode) => {
+                if !editor.is_insert() && matches!(new_mode, Mode::Insert) {
+                    editor.insert_undo_actions = Vec::new();
+                }
+                if editor.is_insert()
+                    && matches!(new_mode, Mode::Normal)
+                    && !editor.insert_undo_actions.is_empty()
+                {
+                    let actions = mem::take(&mut editor.insert_undo_actions);
+                    editor.undoable_actions.push(Action::UndoMultiple(actions));
+                }
+                editor.mode = *new_mode;
             }
             Action::InsertCharAtCursor(c) => {
                 editor
-                    .undoable_actions
+                    .insert_undo_actions
                     .push(Action::RemoveCharAt(editor.pos_x, editor.buffer_line()));
-                editor.buffer.insert(editor.pos_x, editor.buffer_line(), c);
+                editor.buffer.insert(editor.pos_x, editor.buffer_line(), *c);
                 editor.pos_x += 1;
             }
             Action::RemoveCharAt(x, y) => {
-                editor.buffer.remove(x, y);
+                editor.buffer.remove(*x, *y);
             }
             Action::DeleteCharAtCursor => {
                 editor.buffer.remove(editor.pos_x, editor.buffer_line());
             }
             Action::NewLine => {
+                editor
+                    .insert_undo_actions
+                    .push(Action::DeleteLineAt(editor.buffer_line() + 1));
+                editor
+                    .buffer
+                    .insert_line(editor.buffer_line() + 1, String::new());
                 editor.pos_x = 0;
                 editor.pos_y += 1;
             }
@@ -155,6 +178,9 @@ impl Action {
             }
             Action::InsertLineBelow => {
                 editor
+                    .undoable_actions
+                    .push(Action::DeleteLineAt(editor.buffer_line() + 1));
+                editor
                     .buffer
                     .insert_line(editor.buffer_line() + 1, String::new());
                 editor.pos_y += 1;
@@ -162,8 +188,11 @@ impl Action {
                 editor.mode = Mode::Insert;
             }
             Action::InsertLineAt(line, contents) => {
+                editor
+                    .undoable_actions
+                    .push(Action::DeleteLineAt(editor.buffer_line()));
                 if let Some(contents) = contents {
-                    editor.buffer.insert_line(line, contents);
+                    editor.buffer.insert_line(*line, contents.to_string());
                 }
             }
             Action::DeleteCurrentLine => {
@@ -176,13 +205,16 @@ impl Action {
                     .push(Action::InsertLineAt(line, contents));
             }
             Action::SetComboCommand(cmd) => {
-                editor.combo_command = Some(cmd);
+                editor.combo_command = Some(*cmd);
+            }
+            Action::DeleteLineAt(y) => {
+                editor.buffer.remove_line(*y);
             }
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Mode {
     Normal,
     Insert,
@@ -203,6 +235,7 @@ pub struct Editor {
     mode: Mode,
     combo_command: Option<char>,
     undoable_actions: Vec<Action>,
+    insert_undo_actions: Vec<Action>,
 }
 
 impl Editor {
@@ -224,6 +257,7 @@ impl Editor {
             size: terminal::size()?,
             combo_command: None,
             undoable_actions: vec![],
+            insert_undo_actions: vec![],
         })
     }
 
