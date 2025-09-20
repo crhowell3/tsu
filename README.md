@@ -44,6 +44,23 @@
 
 modal text editor for linux
 
+## Installation
+
+### Source
+
+Using git, clone the repository:
+
+```shell
+git clone https://github.com/crhowell3/tsu.git
+cd tsu
+```
+
+Using cargo, install:
+
+```shell
+cargo install --path .
+```
+
 <p align="center">
   Copyright &copy; 2025-present
   <a href="https://github.com/crhowell3" target="_blank">Cameron Howell</a>

@@ -1,17 +1,34 @@
 use crate::editor::Editor;
+use crate::{buffer::Buffer, logger::Logger};
 
 use clap::Parser;
-use std::env;
+use crossterm::{ExecutableCommand, terminal};
+use once_cell::sync::OnceCell;
+use std::{env, io::stdout, panic};
 
+mod buffer;
 mod editor;
+mod logger;
+
+static LOGGER: OnceCell<Logger> = OnceCell::new();
+
+#[macro_export]
+macro_rules! log {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            $crate::LOGGER.get_or_init(|| $crate::Logger::new("tsu.log")).log(&log_message);
+        }
+    };
+}
 
 #[derive(Parser, Debug)]
 #[clap(name = "tsu")]
 #[command(
     version,
-    about,
+    about = "A vimlike modal text editor.",
     author = "Cameron Howell <me@crhowell.com>",
-    display_name = "tsu",
+    display_name = "tsu ツ",
     help_template = "{name} {version}
 author: {author-with-newline}{about-with-newline}
 {usage-heading} {usage}
@@ -25,7 +42,7 @@ struct Args {
     verbose: u8,
     /// File to open
     #[arg(default_value = "")]
-    file: String,
+    file: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -37,8 +54,6 @@ fn main() -> anyhow::Result<()> {
         _ => "trace",
     };
 
-    let filename = args.file;
-
     let crate_name = env!("CARGO_CRATE_NAME");
     let filter = tracing_subscriber::EnvFilter::new(format!("{crate_name}={user_level}"));
 
@@ -46,7 +61,17 @@ fn main() -> anyhow::Result<()> {
         .with_env_filter(filter)
         .init();
 
-    let mut editor = Editor::new()?;
+    let filename = args.file;
+    let buffer = Buffer::from_file(filename);
+    let mut editor = Editor::new(buffer)?;
 
-    editor.run()
+    panic::set_hook(Box::new(|info| {
+        _ = stdout().execute(terminal::LeaveAlternateScreen);
+        _ = terminal::disable_raw_mode();
+
+        eprintln!("{}", info);
+    }));
+
+    editor.run()?;
+    editor.cleanup()
 }
