@@ -53,9 +53,14 @@ impl Action {
     pub fn execute(&self, editor: &mut Editor) {
         match self {
             Action::Quit => {}
-            Action::WriteFile => {
-                unimplemented!()
-            }
+            Action::WriteFile => match editor.buffer.save() {
+                Ok(msg) => {
+                    editor.last_error = Some(msg);
+                }
+                Err(e) => {
+                    editor.last_error = Some(e.to_string());
+                }
+            },
             Action::Undo => {
                 if let Some(undoable_action) = editor.undoable_actions.pop() {
                     undoable_action.execute(editor);
@@ -250,6 +255,7 @@ pub struct Editor {
     combo_command: Option<char>,
     undoable_actions: Vec<Action>,
     insert_undo_actions: Vec<Action>,
+    last_error: Option<String>,
 }
 
 impl Editor {
@@ -272,6 +278,7 @@ impl Editor {
             combo_command: None,
             undoable_actions: vec![],
             insert_undo_actions: vec![],
+            last_error: None,
         })
     }
 

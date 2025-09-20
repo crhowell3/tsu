@@ -9,6 +9,7 @@ impl Buffer {
         let lines = contents.lines().map(|s| s.to_string()).collect();
         Self { file, lines }
     }
+
     pub fn from_file(file: Option<String>) -> Self {
         match &file {
             Some(file) => {
@@ -16,6 +17,22 @@ impl Buffer {
                 Self::new(Some(file.to_string()), contents.to_string())
             }
             None => Self::new(file, String::new()),
+        }
+    }
+
+    pub fn save(&self) -> anyhow::Result<String> {
+        if let Some(file) = &self.file {
+            let contents = self.lines.join("\n");
+            std::fs::write(file, &contents)?;
+            let message = format!(
+                "{:?} {}L, {}B written",
+                file,
+                self.lines.len(),
+                contents.len()
+            );
+            Ok(message)
+        } else {
+            Err(anyhow::anyhow!("No file name"))
         }
     }
 
