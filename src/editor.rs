@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crossterm::{
     ExecutableCommand, QueueableCommand, cursor,
-    event::{self, read},
+    event::{self, KeyModifiers, read},
     style::{self, Color, Stylize},
     terminal,
 };
@@ -22,6 +22,8 @@ enum Action {
     MoveDown,
     MoveLeft,
     MoveRight,
+    MoveTop,
+    MoveBottom,
     MoveToLineEnd,
     MoveToLineStart,
     PageUp,
@@ -29,6 +31,8 @@ enum Action {
 
     // Text editing
     InsertCharAtCursor(char),
+    InsertLineAbove,
+    InsertLineBelow,
     InsertLineAt(usize, Option<String>),
     NewLine,
     DeleteCharAtCursor,
@@ -95,6 +99,18 @@ impl Action {
             Action::MoveRight => {
                 editor.pos_x += 1;
             }
+            Action::MoveTop => {
+                editor.vtop = 0;
+                editor.pos_y = 0;
+            }
+            Action::MoveBottom => {
+                if editor.buffer.len() > editor.vheight() as usize {
+                    editor.pos_y = editor.vheight() - 1;
+                    editor.vtop = editor.buffer.len() - editor.vheight() as usize;
+                } else {
+                    editor.pos_y = editor.buffer.len() as u16 - 1u16;
+                }
+            }
             Action::MoveToLineStart => {
                 editor.pos_x = 0;
             }
@@ -124,6 +140,21 @@ impl Action {
             Action::NewLine => {
                 editor.pos_x = 0;
                 editor.pos_y += 1;
+            }
+            Action::InsertLineAbove => {
+                editor
+                    .buffer
+                    .insert_line(editor.buffer_line(), String::new());
+                editor.pos_y = editor.pos_y.saturating_sub(1);
+                editor.mode = Mode::Insert;
+            }
+            Action::InsertLineBelow => {
+                editor
+                    .buffer
+                    .insert_line(editor.buffer_line() + 1, String::new());
+                editor.pos_y += 1;
+                editor.pos_x = 0;
+                editor.mode = Mode::Insert;
             }
             Action::InsertLineAt(line, contents) => {
                 if let Some(contents) = contents {
@@ -347,13 +378,17 @@ impl Editor {
         Ok(())
     }
 
+    fn is_insert(&self) -> bool {
+        matches!(self.mode, Mode::Insert)
+    }
+
     fn check_bounds(&mut self) {
         let line_len = self.line_length();
 
-        if self.pos_x >= line_len {
+        if self.pos_x >= line_len && !self.is_insert() {
             if line_len > 0 {
                 self.pos_x = self.line_length() - 1;
-            } else {
+            } else if !self.is_insert() {
                 self.pos_x = 0;
             }
         }
@@ -406,29 +441,35 @@ impl Editor {
             return Ok(self.handle_combo_command(cmd, ev));
         }
 
-        match ev {
-            event::Event::Key(event) => match event.code {
-                event::KeyCode::Up | event::KeyCode::Char('k') => Ok(Some(Action::MoveUp)),
-                event::KeyCode::Down | event::KeyCode::Char('j') => Ok(Some(Action::MoveDown)),
-                event::KeyCode::Left | event::KeyCode::Char('h') => Ok(Some(Action::MoveLeft)),
-                event::KeyCode::Right | event::KeyCode::Char('l') => Ok(Some(Action::MoveRight)),
-                event::KeyCode::Home => Ok(Some(Action::MoveToLineStart)),
-                event::KeyCode::End => Ok(Some(Action::MoveToLineEnd)),
-                event::KeyCode::Delete => Ok(Some(Action::DeleteCharAtCursor)),
-                event::KeyCode::PageUp => Ok(Some(Action::PageUp)),
-                event::KeyCode::PageDown => Ok(Some(Action::PageDown)),
-                event::KeyCode::Char('d') => Ok(Some(Action::SetComboCommand('d'))),
-                event::KeyCode::Char('g') => Ok(Some(Action::SetComboCommand('g'))),
-                event::KeyCode::Char('z') => Ok(Some(Action::SetComboCommand('z'))),
-                event::KeyCode::Char('i') => Ok(Some(Action::EnterMode(Mode::Insert))),
-                event::KeyCode::Char('u') => Ok(Some(Action::Undo)),
-                event::KeyCode::Char('v') => Ok(Some(Action::EnterMode(Mode::Visual))),
-                event::KeyCode::Char(':') => Ok(Some(Action::EnterMode(Mode::Command))),
-                event::KeyCode::Char('r') => Ok(Some(Action::EnterMode(Mode::Replace))),
-                _ => Ok(None),
-            },
-            _ => Ok(None),
-        }
+        let action = match ev {
+            event::Event::Key(event) => {
+                let code = event.code;
+                match code {
+                    event::KeyCode::Up | event::KeyCode::Char('k') => Some(Action::MoveUp),
+                    event::KeyCode::Down | event::KeyCode::Char('j') => Some(Action::MoveDown),
+                    event::KeyCode::Left | event::KeyCode::Char('h') => Some(Action::MoveLeft),
+                    event::KeyCode::Right | event::KeyCode::Char('l') => Some(Action::MoveRight),
+                    event::KeyCode::Home => Some(Action::MoveToLineStart),
+                    event::KeyCode::End => Some(Action::MoveToLineEnd),
+                    event::KeyCode::Delete => Some(Action::DeleteCharAtCursor),
+                    event::KeyCode::PageUp => Some(Action::PageUp),
+                    event::KeyCode::PageDown => Some(Action::PageDown),
+                    event::KeyCode::Char('o') => Some(Action::InsertLineBelow),
+                    event::KeyCode::Char('O') => Some(Action::InsertLineAbove),
+                    event::KeyCode::Char('d') => Some(Action::SetComboCommand('d')),
+                    event::KeyCode::Char('g') => Some(Action::SetComboCommand('g')),
+                    event::KeyCode::Char('z') => Some(Action::SetComboCommand('z')),
+                    event::KeyCode::Char('i') => Some(Action::EnterMode(Mode::Insert)),
+                    event::KeyCode::Char('u') => Some(Action::Undo),
+                    event::KeyCode::Char('v') => Some(Action::EnterMode(Mode::Visual)),
+                    event::KeyCode::Char(':') => Some(Action::EnterMode(Mode::Command)),
+                    event::KeyCode::Char('r') => Some(Action::EnterMode(Mode::Replace)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        Ok(action)
     }
 
     fn handle_combo_command(&self, cmd: char, ev: event::Event) -> Option<Action> {
@@ -444,6 +485,8 @@ impl Editor {
                 event::Event::Key(event) => match event.code {
                     event::KeyCode::Char('h') => Some(Action::MoveToLineStart),
                     event::KeyCode::Char('l') => Some(Action::MoveToLineEnd),
+                    event::KeyCode::Char('g') => Some(Action::MoveTop),
+                    event::KeyCode::Char('e') => Some(Action::MoveBottom),
                     _ => None,
                 },
                 _ => None,
