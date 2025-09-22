@@ -443,7 +443,7 @@ impl Editor {
         let y = self.size.1 as usize - 2;
 
         let transition_style = Style {
-            foreground: self.theme.status_line_style.outer_style.foreground,
+            foreground: self.theme.status_line_style.outer_style.background,
             background: self.theme.status_line_style.inner_style.background,
             ..Default::default()
         };
