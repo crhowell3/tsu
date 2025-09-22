@@ -1,4 +1,6 @@
+use crate::config::Config;
 use crate::editor::Editor;
+use crate::theme::parse_vscode_theme;
 use crate::{buffer::Buffer, logger::Logger};
 
 use clap::Parser;
@@ -7,9 +9,15 @@ use once_cell::sync::OnceCell;
 use std::{env, io::stdout, panic};
 
 mod buffer;
+mod color;
+mod config;
 mod editor;
+mod highlighter;
 mod logger;
+mod theme;
+mod unicode;
 
+#[allow(dead_code)]
 static LOGGER: OnceCell<Logger> = OnceCell::new();
 
 #[macro_export]
@@ -45,7 +53,8 @@ struct Args {
     file: Option<String>,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let user_level = match args.verbose {
         0 => "warn",
@@ -61,9 +70,28 @@ fn main() -> anyhow::Result<()> {
         .with_env_filter(filter)
         .init();
 
+    let config_file = std::env::home_dir()
+        .unwrap()
+        .join(".config/tsu/config.toml");
+    if !config_file.exists() {
+        eprintln!("Config file {} not found", config_file.display());
+        std::process::exit(1);
+    }
+
+    let toml = std::fs::read_to_string(config_file)?;
+    let config: Config = toml::from_str(&toml)?;
+
     let filename = args.file;
     let buffer = Buffer::from_file(filename);
-    let mut editor = Editor::new(buffer)?;
+
+    let theme_file = &Config::path("themes").join(&config.theme);
+    if !theme_file.exists() {
+        eprintln!("Theme file {} not found", config.theme);
+        std::process::exit(1);
+    }
+    let theme = parse_vscode_theme(&theme_file.to_string_lossy())?;
+
+    let mut editor = Editor::new(config, theme, buffer)?;
 
     panic::set_hook(Box::new(|info| {
         _ = stdout().execute(terminal::LeaveAlternateScreen);
@@ -72,6 +100,10 @@ fn main() -> anyhow::Result<()> {
         eprintln!("{}", info);
     }));
 
-    editor.run()?;
-    editor.cleanup()
+    let result = editor.run().await;
+
+    editor.cleanup()?;
+    result?;
+
+    Ok(())
 }

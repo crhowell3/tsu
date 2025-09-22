@@ -1,0 +1,37 @@
+theme = "tokyo-night-storm.json"
+
+log_file = "/tmp/tsu.log"
+
+[keys.insert]
+Enter = "InsertNewLine"
+Backspace = "DeletePreviousChar"
+Esc = { EnterMode = "Normal" }
+
+[keys.normal]
+"Up" = "MoveUp"
+"Down" = "MoveDown"
+"Left" = "MoveLeft"
+"Right" = "MoveRight"
+"k" = "MoveUp"
+"j" = "MoveDown"
+"h" = "MoveLeft"
+"l" = "MoveRight"
+"Home" = "MoveToLineStart"
+"End" = "MoveToLineEnd"
+"Delete" = "DeleteCharAtCursor"
+"PageUp" = "PageUp"
+"PageDown" = "PageDown"
+"o" = [ { EnterMode = "Insert" }, "InsertLineBelow" ]
+"O" = [ { EnterMode = "Insert" }, "InsertLineAbove" ]
+"d" = { "d" = "DeleteCurrentLine" }
+"g" = { "g" = "MoveTop", "h" = "MoveToLineStart", "l" = "MoveToLineEnd", "e" = "MoveBottom" }
+"z" = { "z" = "CenterView" }
+"u" = "Undo"
+":" = { EnterMode = "Command" }
+
+[keys.command]
+Esc = { EnterMode = "Normal" }
+
+[commands]
+"write" = "Save"
+"quit" = "Quit"
