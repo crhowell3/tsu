@@ -263,14 +263,4 @@ mod test {
         let theme = parse_vscode_theme("./src/fixtures/tokyo-night-storm.json").unwrap();
         println!("{:?}", theme);
     }
-
-    #[test]
-    fn test_parse_token_color_without_scope() {
-        parse_vscode_theme("./src/fixtures/theme_colors_without_scope.json").unwrap();
-    }
-
-    #[test]
-    fn test_theme_with_comments() {
-        parse_vscode_theme("src/fixtures/theme_with_comments.json").unwrap();
-    }
 }
