@@ -824,7 +824,9 @@ impl Editor {
     }
 
     pub fn cleanup(&mut self) -> anyhow::Result<()> {
-        self.stdout.execute(terminal::LeaveAlternateScreen)?;
+        self.stdout
+            .execute(terminal::LeaveAlternateScreen)?
+            .execute(event::DisableMouseCapture)?;
         terminal::disable_raw_mode()?;
 
         Ok(())
