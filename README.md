@@ -61,6 +61,14 @@ Using cargo, install:
 cargo install --path .
 ```
 
+Perform mandatory configuration setp:
+
+```shell
+mkdir -p ~/.config/tsu
+cp default_config.toml ~/.config/tsu/config.toml
+cp -R themes ~/.config/tsu
+```
+
 <p align="center">
   Copyright &copy; 2025-present
   <a href="https://github.com/crhowell3" target="_blank">Cameron Howell</a>
