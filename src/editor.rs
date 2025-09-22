@@ -59,7 +59,7 @@ pub enum Action {
 
     // Misc
     EnterMode(Mode),
-    SetComboKeyAction(Box<KeyAction>),
+    SetWaitingKey(Box<KeyAction>),
 }
 
 #[allow(unused)]
@@ -505,6 +505,7 @@ impl Editor {
         buffer.set_text(0, self.size.1 as usize - 1, &cmd_line, style);
     }
 
+    #[allow(dead_code)]
     fn is_normal(&self) -> bool {
         matches!(self.mode, Mode::Normal)
     }
@@ -671,7 +672,7 @@ impl Editor {
 
                             self.redraw(&current_buffer, &mut buffer)?;
                         },
-                        Some(Err(error)) => {
+                        Some(Err(_error)) => {
 
                         },
                         None => {}
@@ -1062,7 +1063,7 @@ impl Editor {
                     }
                 }
             }
-            Action::SetComboKeyAction(key_action) => {
+            Action::SetWaitingKey(key_action) => {
                 self.waiting_key_action = Some(*(key_action.clone()));
             }
             Action::DeleteLineAt(y) => {

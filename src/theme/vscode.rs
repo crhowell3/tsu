@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 
 use crate::{
     color::{Color, parse_rgb},
-    theme::{StatusLineStyle, vscode},
+    theme::StatusLineStyle,
 };
 
 use serde::Deserialize;
@@ -134,6 +134,7 @@ impl TryFrom<VSCodeTokenColor> for TokenStyle {
 struct VSCodeTheme {
     name: Option<String>,
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     obj_type: Option<String>,
     colors: Map<String, Value>,
     token_colors: Vec<VSCodeTokenColor>,

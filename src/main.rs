@@ -17,6 +17,7 @@ mod logger;
 mod theme;
 mod unicode;
 
+#[allow(dead_code)]
 static LOGGER: OnceCell<Logger> = OnceCell::new();
 
 #[macro_export]

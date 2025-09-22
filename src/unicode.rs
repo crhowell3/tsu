@@ -2,10 +2,12 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
+#[allow(dead_code)]
 pub fn display_width(s: &str) -> usize {
     s.width()
 }
 
+#[allow(dead_code)]
 pub fn char_display_width(c: char) -> usize {
     c.width().unwrap_or(0)
 }

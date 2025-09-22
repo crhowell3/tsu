@@ -7,6 +7,7 @@ pub use vscode::parse_vscode_theme;
 
 #[derive(Debug, Clone)]
 pub struct Theme {
+    #[allow(dead_code)]
     pub name: String,
     pub style: Style,
     pub gutter_style: Style,
@@ -26,6 +27,7 @@ impl Theme {
         })
     }
 
+    #[allow(dead_code)]
     pub fn get_selection_background(&self) -> Color {
         self.selection_style
             .as_ref()
@@ -83,6 +85,7 @@ pub struct Style {
 }
 
 impl Style {
+    #[allow(dead_code)]
     pub fn fallback_background(&self, fallback_background: &Style) -> Style {
         let background = self
             .background
@@ -91,6 +94,7 @@ impl Style {
         self.with_background(background)
     }
 
+    #[allow(dead_code)]
     pub fn with_background(&self, background: Option<Color>) -> Style {
         Style {
             background,
@@ -98,6 +102,7 @@ impl Style {
         }
     }
 
+    #[allow(dead_code)]
     pub fn inverted(&self) -> Style {
         Style {
             foreground: self.background,
