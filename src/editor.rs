@@ -431,15 +431,8 @@ impl Editor {
             self.pos_x + self.vleft + 1
         );
 
-        let left_separator = "";
-        let right_separator = "";
-
         // Calculate file string width dynamically
-        let file_str_width = self.size.0
-            - mode_str.len() as u16
-            - position_str.len() as u16
-            - left_separator.len() as u16
-            - right_separator.len() as u16;
+        let file_str_width = self.size.0 - mode_str.len() as u16 - position_str.len() as u16 - 2;
         let y = self.size.1 as usize - 2;
 
         let transition_style = Style {
