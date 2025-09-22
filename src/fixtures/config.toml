@@ -1,0 +1,26 @@
+theme = "themes/tokyo-night-storm.json"
+
+[keys.normal]
+"Up" = "MoveUp"
+"Down" = "MoveDown"
+"Left" = "MoveLeft"
+"Right" = "MoveRight"
+"k" = "MoveUp"
+"j" = "MoveDown"
+"h" = "MoveLeft"
+"l" = "MoveRight"
+"Home" = "MoveToLineStart"
+"End" = "MoveToLineEnd"
+"Delete" = "DeleteCharAtCursor"
+"PageUp" = "PageUp"
+"PageDown" = "PageDown"
+"o" = "InsertLineBelow"
+"O" = "InsertLineAbove"
+"d" = { "d" = "DeleteCurrentLine" }
+"g" = { "g" = "", "h" = "MoveToLineStart", "l" = "MoveToLineEnd", "e" = "MoveBottom" }
+"z" = { "z" = "CenterBuffer" }
+"u" = "Undo"
+":" = "EnterMode(Mode::Command)"
+
+[keys.normal.i]
+EnterMode = "Insert"
