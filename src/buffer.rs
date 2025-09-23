@@ -1,35 +1,60 @@
+use std::path::Path;
+
+use ropey::Rope;
+
 #[derive(Debug)]
 pub struct Buffer {
     pub file: Option<String>,
-    pub lines: Vec<String>,
+    content: Rope,
 }
 
 impl Buffer {
     pub fn new(file: Option<String>, contents: String) -> Self {
-        let lines = contents.lines().map(|s| s.to_string()).collect();
-        Self { file, lines }
+        let contents = if contents.is_empty() {
+            "\n".to_string()
+        } else {
+            contents
+        };
+
+        Self {
+            file,
+            content: Rope::from_str(&contents),
+        }
     }
 
-    pub fn from_file(file: Option<String>) -> Self {
+    pub async fn from_file(file: Option<String>) -> anyhow::Result<Self> {
         match &file {
             Some(file) => {
-                let contents = std::fs::read_to_string(file).unwrap();
-                Self::new(Some(file.to_string()), contents.to_string())
+                let path = Path::new(file);
+                if !path.exists() {
+                    return Err(anyhow::anyhow!("file {:?} not found", file));
+                }
+
+                let contents = std::fs::read_to_string(file)?;
+
+                if contents
+                    .chars()
+                    .any(|c| c as u32 >= 0x1F300 && c as u32 <= 0x1F9FF)
+                {
+                    // NOOP
+                }
+
+                Ok(Self::new(Some(file.to_string()), contents))
             }
-            None => Self::new(file, String::new()),
+            None => Ok(Self::new(file, "\n".to_string())),
         }
+    }
+
+    /// Returns the entirety of the buffer's content as a String
+    pub fn contents(&self) -> String {
+        self.content.to_string()
     }
 
     pub fn save(&self) -> anyhow::Result<String> {
         if let Some(file) = &self.file {
-            let contents = self.lines.join("\n");
+            let contents = self.contents();
             std::fs::write(file, &contents)?;
-            let message = format!(
-                "{:?} {}L, {}B written",
-                file,
-                self.lines.len(),
-                contents.len()
-            );
+            let message = format!("{:?} {}L, {}B written", file, self.len(), contents.len());
             Ok(message)
         } else {
             Err(anyhow::anyhow!("No file name"))
@@ -37,42 +62,87 @@ impl Buffer {
     }
 
     pub fn get(&self, line: usize) -> Option<String> {
-        if self.lines.len() > line {
-            return Some(self.lines[line].clone());
+        if line > self.len() {
+            return None;
         }
 
-        None
+        Some(self.content.line(line).to_string())
     }
 
     pub fn len(&self) -> usize {
-        self.lines.len()
+        self.content.len_lines() - 1
     }
 
     pub fn insert(&mut self, x: usize, y: usize, c: char) {
-        if let Some(line) = self.lines.get_mut(y) {
-            (*line).insert(x, c);
+        let char_idx = self.position_to_char_idx(x, y);
+        let total_chars = self.content.len_chars();
+
+        if char_idx > total_chars {
+            self.content.insert_char(total_chars, c);
+        } else {
+            self.content.insert_char(char_idx, c);
         }
     }
 
     pub fn insert_line(&mut self, line: usize, content: String) {
-        self.lines.insert(line, content);
+        let char_idx = if line >= self.content.len_lines() {
+            self.content.len_chars()
+        } else {
+            self.content.line_to_char(line)
+        };
+        self.content.insert(char_idx, &format!("{}\n", content));
     }
 
     pub fn remove(&mut self, x: usize, y: usize) {
-        if let Some(line) = self.lines.get_mut(y) {
-            (*line).remove(x);
+        let char_idx = self.position_to_char_idx(x, y);
+        if char_idx < self.content.len_chars() {
+            self.content.remove(char_idx..char_idx + 1);
         }
     }
 
     pub fn remove_line(&mut self, line: usize) {
-        if self.len() > line {
-            self.lines.remove(line);
+        if line >= self.content.len_lines() {
+            return;
         }
+
+        let start_char = self.content.line_to_char(line);
+        let end_char = if line + 1 < self.content.len_lines() {
+            self.content.line_to_char(line + 1)
+        } else {
+            self.content.len_chars()
+        };
+
+        self.content.remove(start_char..end_char);
     }
 
-    pub(crate) fn view(&self, vtop: usize, vheight: usize) -> String {
-        let height = std::cmp::min(vtop + vheight, self.lines.len());
-        self.lines[vtop..height].join("\n")
+    pub fn view(&self, vtop: usize, vheight: usize) -> String {
+        let height = std::cmp::min(vtop + vheight, self.content.len_lines());
+        let mut result = String::new();
+        for i in vtop..height {
+            result.push_str(&self.content.line(i).to_string());
+        }
+        result
+    }
+
+    fn position_to_char_idx(&self, x: usize, y: usize) -> usize {
+        if y >= self.content.len_lines() {
+            return self.content.len_chars();
+        }
+
+        let line_start_char = self.content.line_to_char(y);
+
+        let line = self.content.line(y);
+        let line_chars = line.len_chars();
+
+        let line_chars_no_newline = if line_chars > 0 && line.char(line_chars - 1) == '\n' {
+            line_chars - 1
+        } else {
+            line_chars
+        };
+
+        let x = x.min(line_chars_no_newline);
+
+        line_start_char + x
     }
 }
 
@@ -87,7 +157,7 @@ mod test {
             "this\nis\na\ntest\nusing\nmultiple\nlines".to_string(),
         );
 
-        assert_eq!(buffer.view(0, 2), "this\nis");
+        assert_eq!(buffer.view(0, 2), "this\nis\n");
     }
 
     #[test]
