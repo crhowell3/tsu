@@ -49,7 +49,7 @@ struct Args {
     #[arg(short, action = clap::ArgAction::Count, help="Increases logging verbosity (-v, -vv, -vvv)")]
     verbose: u8,
     /// File to open
-    #[arg(default_value = "")]
+    #[arg()]
     file: Option<String>,
 }
 
@@ -81,8 +81,12 @@ async fn main() -> anyhow::Result<()> {
     let toml = std::fs::read_to_string(config_file)?;
     let config: Config = toml::from_str(&toml)?;
 
-    let filename = args.file;
-    let buffer = Buffer::from_file(filename);
+    let buffer;
+    if let Some(filename) = args.file {
+        buffer = Buffer::from_file(Some(filename));
+    } else {
+        buffer = Buffer::new(None, String::new());
+    }
 
     let theme_file = &Config::path("themes").join(&config.theme);
     if !theme_file.exists() {
