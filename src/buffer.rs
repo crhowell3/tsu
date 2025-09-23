@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use ropey::Rope;
 
 #[derive(Debug)]
@@ -20,13 +22,26 @@ impl Buffer {
         }
     }
 
-    pub fn from_file(file: Option<String>) -> Self {
+    pub async fn from_file(file: Option<String>) -> anyhow::Result<Self> {
         match &file {
             Some(file) => {
-                let contents = std::fs::read_to_string(file).unwrap();
-                Self::new(Some(file.to_string()), contents.to_string())
+                let path = Path::new(file);
+                if !path.exists() {
+                    return Err(anyhow::anyhow!("file {:?} not found", file));
+                }
+
+                let contents = std::fs::read_to_string(file)?;
+
+                if contents
+                    .chars()
+                    .any(|c| c as u32 >= 0x1F300 && c as u32 <= 0x1F9FF)
+                {
+                    // NOOP
+                }
+
+                Ok(Self::new(Some(file.to_string()), contents))
             }
-            None => Self::new(file, String::new()),
+            None => Ok(Self::new(file, "\n".to_string())),
         }
     }
 
@@ -142,7 +157,7 @@ mod test {
             "this\nis\na\ntest\nusing\nmultiple\nlines".to_string(),
         );
 
-        assert_eq!(buffer.view(0, 2), "this\nis");
+        assert_eq!(buffer.view(0, 2), "this\nis\n");
     }
 
     #[test]

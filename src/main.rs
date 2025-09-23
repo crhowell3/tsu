@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
 
     let buffer;
     if let Some(filename) = args.file {
-        buffer = Buffer::from_file(Some(filename));
+        buffer = Buffer::from_file(Some(filename)).await?;
     } else {
         buffer = Buffer::new(None, String::new());
     }
