@@ -16,7 +16,9 @@ Esc = { EnterMode = "Normal" }
 "j" = "MoveDown"
 "h" = "MoveLeft"
 "l" = "MoveRight"
+"0" = "MoveToLineStart"
 "Home" = "MoveToLineStart"
+"$" = "MoveToLineEnd"
 "End" = "MoveToLineEnd"
 "Delete" = "DeleteCharAtCursor"
 "PageUp" = "PageUp"
@@ -26,6 +28,7 @@ Esc = { EnterMode = "Normal" }
 "i" = { EnterMode = "Insert" }
 "d" = { "d" = "DeleteCurrentLine" }
 "g" = { "g" = "MoveToTopOfBuffer", "h" = "MoveToLineStart", "l" = "MoveToLineEnd", "e" = "MoveToBottomOfBuffer" }
+"G" = "MoveToBottomOfBuffer"
 "z" = { "z" = "CenterView", "t" = "MoveToTop", "b" = "MoveToBottom" }
 "u" = "Undo"
 ":" = { EnterMode = "Command" }
