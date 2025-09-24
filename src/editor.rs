@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     buffer::Buffer,
+    command,
     config::{Config, KeyAction},
     highlighter::Highlighter,
+    log,
     theme::{Style, Theme},
     unicode,
 };
@@ -20,8 +22,9 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Action {
     // Buffer actions
-    Quit,
+    Quit(bool),
     Save,
+    SaveAs(String),
     Undo,
     UndoMultiple(Vec<Action>),
     CenterView,
@@ -716,20 +719,41 @@ impl Editor {
         }
     }
 
-    fn handle_command(&mut self, cmd: &str) -> Option<Action> {
+    fn handle_command(&mut self, cmd: &str) -> Vec<Action> {
+        log!("handle_command: {}", cmd);
+        self.command = String::new();
+        self.waiting_command = None;
+        self.last_error = None;
+
         if let Ok(line) = cmd.parse::<usize>() {
-            return Some(Action::GoToLine(line));
+            return vec![Action::GoToLine(line)];
         }
 
-        if cmd == "q" {
-            return Some(Action::Quit);
+        let commands = &["quit", "write"];
+
+        let parsed = command::parse(commands, cmd);
+
+        let Some(parsed) = parsed else {
+            self.last_error = Some(format!("unknown command {cmd:?}"));
+            return vec![];
+        };
+
+        let mut actions = vec![];
+        for cmd in &parsed.commands {
+            if cmd == "quit" {
+                actions.push(Action::Quit(parsed.is_forced()));
+            }
+
+            if cmd == "write" {
+                if let Some(file) = parsed.args.first() {
+                    actions.push(Action::SaveAs(file.clone()));
+                } else {
+                    actions.push(Action::Save);
+                }
+            }
         }
 
-        if cmd == "w" {
-            return Some(Action::Save);
-        }
-
-        None
+        actions
     }
 
     fn handle_waiting_command(
@@ -848,8 +872,23 @@ impl Editor {
     ) -> anyhow::Result<bool> {
         self.last_error = None;
         match action {
-            Action::Quit => return Ok(true),
+            Action::Quit(force) => {
+                if *force {
+                    return Ok(true);
+                }
+
+                self.last_error = Some(format!("Buffer has unwritten changes: "));
+                return Ok(false);
+            }
             Action::Save => match self.buffer.save() {
+                Ok(msg) => {
+                    self.last_error = Some(msg);
+                }
+                Err(e) => {
+                    self.last_error = Some(e.to_string());
+                }
+            },
+            Action::SaveAs(new_file_name) => match self.buffer.save_as(new_file_name) {
                 Ok(msg) => {
                     self.last_error = Some(msg);
                 }
@@ -1101,13 +1140,11 @@ impl Editor {
                 self.buffer.remove_line(*y);
             }
             Action::Command(cmd) => {
-                self.command = String::new();
-
-                if let Some(ref action) = self.handle_command(cmd) {
+                for action in self.handle_command(cmd) {
                     self.last_error = None;
-                    return self.execute(action, buffer).await;
-                } else {
-                    self.last_error = Some(format!("Not an editor command: {cmd:?}"));
+                    if self.execute(&action, buffer).await? {
+                        return Ok(true);
+                    }
                 }
             }
             Action::GoToLine(line) => {
