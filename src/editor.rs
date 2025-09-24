@@ -26,7 +26,7 @@ pub enum Action {
     UndoMultiple(Vec<Action>),
     CenterView,
 
-    // Movement
+    // Cursor movement
     MoveUp,
     MoveDown,
     MoveLeft,
@@ -37,6 +37,8 @@ pub enum Action {
     MoveToLineStart,
     MoveLineToViewCenter,
     MoveLineToViewBottom,
+    MoveViewDownOneLine,
+    MoveViewUpOneLine,
     PageUp,
     PageDown,
 
@@ -957,6 +959,28 @@ impl Editor {
                     self.pos_y = self.vheight() - 1;
                     self.draw_view(buffer)?;
                 }
+            }
+            Action::MoveViewDownOneLine => {
+                if self.vtop < self.buffer.len() - self.vheight() {
+                    self.vtop += 1;
+                    if self.pos_y > 5 {
+                        self.pos_y = self.pos_y.saturating_sub(1);
+                    } else {
+                        self.pos_y = 5;
+                    }
+                }
+                self.draw_view(buffer)?;
+            }
+            Action::MoveViewUpOneLine => {
+                if self.vtop > 0 {
+                    self.vtop = self.vtop.saturating_sub(1);
+                    if self.pos_y < self.vheight() - 7 {
+                        self.pos_y += 1;
+                    } else {
+                        self.pos_y = self.vheight() - 7
+                    }
+                }
+                self.draw_view(buffer)?;
             }
             Action::PageUp => {
                 if self.vtop > 0 {
