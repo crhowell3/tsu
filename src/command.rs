@@ -61,3 +61,68 @@ fn parse_commands(commands: &[&str], input: &str) -> Vec<String> {
 
     result
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parse() {
+        let commands = ["quit", "write"];
+        assert_eq!(
+            parse(&commands, "quit"),
+            Some(ParsedCommand {
+                commands: vec!["quit".to_string()],
+                flags: vec![],
+                ..Default::default()
+            })
+        );
+        assert_eq!(
+            parse(&commands, "q"),
+            Some(ParsedCommand {
+                commands: vec!["quit".to_string()],
+                flags: vec![],
+                ..Default::default()
+            })
+        );
+        assert_eq!(
+            parse(&commands, "q!"),
+            Some(ParsedCommand {
+                commands: vec!["quit".to_string()],
+                flags: vec![CommandFlag::Force],
+                ..Default::default()
+            })
+        );
+        assert_eq!(
+            parse(&commands, "wq"),
+            Some(ParsedCommand {
+                commands: vec!["write".to_string(), "quit".to_string()],
+                flags: vec![],
+                ..Default::default()
+            })
+        );
+        assert_eq!(
+            parse(&commands, "wq!"),
+            Some(ParsedCommand {
+                commands: vec!["write".to_string(), "quit".to_string()],
+                flags: vec![CommandFlag::Force],
+                ..Default::default()
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_command() {
+        let commands = ["quit", "write"];
+        assert_eq!(parse_commands(&commands, "quit"), vec!["quit"]);
+        assert_eq!(parse_commands(&commands, "q"), vec!["quit"]);
+        assert_eq!(parse_commands(&commands, "w"), vec!["write"]);
+        assert_eq!(parse_commands(&commands, "wq"), vec!["write", "quit"]);
+    }
+
+    #[test]
+    fn test_parse_flags() {
+        assert_eq!(parse_flags("q"), (vec![], "q"));
+        assert_eq!(parse_flags("q!"), (vec![CommandFlag::Force], "q"));
+    }
+}
