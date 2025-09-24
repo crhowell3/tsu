@@ -25,8 +25,8 @@ Esc = { EnterMode = "Normal" }
 "O" = [ { EnterMode = "Insert" }, "InsertLineAbove" ]
 "i" = { EnterMode = "Insert" }
 "d" = { "d" = "DeleteCurrentLine" }
-"g" = { "g" = "MoveTop", "h" = "MoveToLineStart", "l" = "MoveToLineEnd", "e" = "MoveBottom" }
-"z" = { "z" = "CenterView" }
+"g" = { "g" = "MoveToTopOfBuffer", "h" = "MoveToLineStart", "l" = "MoveToLineEnd", "e" = "MoveToBottomOfBuffer" }
+"z" = { "z" = "CenterView", "t" = "MoveToTop", "b" = "MoveToBottom" }
 "u" = "Undo"
 ":" = { EnterMode = "Command" }
 "Ctrl-e" = "MoveViewDownOneLine"

@@ -31,14 +31,16 @@ pub enum Action {
     MoveDown,
     MoveLeft,
     MoveRight,
-    MoveTop,
-    MoveBottom,
+    MoveToTop,
+    MoveToBottom,
     MoveToLineEnd,
     MoveToLineStart,
     MoveLineToViewCenter,
     MoveLineToViewBottom,
     MoveViewDownOneLine,
     MoveViewUpOneLine,
+    MoveToBottomOfBuffer,
+    MoveToTopOfBuffer,
     PageUp,
     PageDown,
 
@@ -871,10 +873,8 @@ impl Editor {
 
                 if distance_to_center > 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
-                    if self.vtop > distance_to_center {
-                        self.vtop += distance_to_center;
-                        self.pos_y = view_center;
-                    }
+                    self.vtop += distance_to_center;
+                    self.pos_y = view_center;
                 } else if distance_to_center < 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
                     let new_vtop = self.vtop.saturating_sub(distance_to_center);
@@ -883,6 +883,7 @@ impl Editor {
                         self.pos_y = view_center;
                     }
                 }
+                self.draw_view(buffer)?;
             }
             Action::MoveUp => {
                 if self.pos_y == 0 {
@@ -911,17 +912,21 @@ impl Editor {
             Action::MoveRight => {
                 self.pos_x += 1;
             }
-            Action::MoveTop => {
-                self.vtop = 0;
+            Action::MoveToTop => {
                 self.pos_y = 0;
             }
-            Action::MoveBottom => {
-                if self.buffer.len() > self.vheight() {
-                    self.pos_y = self.vheight() - 1;
-                    self.vtop = self.buffer.len() - self.vheight();
-                } else {
-                    self.pos_y = self.buffer.len() - 1;
-                }
+            Action::MoveToBottom => {
+                self.pos_y = self.vheight() - 1;
+            }
+            Action::MoveToTopOfBuffer => {
+                self.vtop = 0;
+                self.pos_y = 0;
+                self.draw_view(buffer)?;
+            }
+            Action::MoveToBottomOfBuffer => {
+                self.vtop = self.buffer.len() - self.vheight();
+                self.pos_y = self.vheight() - 1;
+                self.draw_view(buffer)?;
             }
             Action::MoveToLineStart => {
                 self.pos_x = 0;
@@ -1121,7 +1126,7 @@ impl Editor {
         pos: GoToLinePosition,
     ) -> anyhow::Result<()> {
         if line == 0 {
-            self.execute(&Action::MoveTop, buffer).await?;
+            self.execute(&Action::MoveToTop, buffer).await?;
             return Ok(());
         }
 
