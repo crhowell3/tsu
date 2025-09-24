@@ -1,5 +1,3 @@
-use clap::Command;
-
 #[derive(Debug, PartialEq)]
 pub enum CommandFlag {
     Force,
