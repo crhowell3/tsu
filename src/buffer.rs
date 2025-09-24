@@ -6,6 +6,7 @@ use ropey::Rope;
 pub struct Buffer {
     pub file: Option<String>,
     content: Rope,
+    pub dirty: bool,
 }
 
 impl Buffer {
@@ -19,6 +20,7 @@ impl Buffer {
         Self {
             file,
             content: Rope::from_str(&contents),
+            dirty: false,
         }
     }
 
@@ -59,6 +61,20 @@ impl Buffer {
         } else {
             Err(anyhow::anyhow!("No file name"))
         }
+    }
+
+    pub fn save_as(&mut self, new_file_name: &str) -> anyhow::Result<String> {
+        let contents = self.contents();
+        std::fs::write(new_file_name, &contents)?;
+        self.dirty = false;
+        self.file = Some(new_file_name.to_string());
+        let message = format!(
+            "{:?} {}L, {}B written",
+            new_file_name,
+            self.len(),
+            contents.len()
+        );
+        Ok(message)
     }
 
     pub fn get(&self, line: usize) -> Option<String> {

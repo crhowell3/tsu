@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     buffer::Buffer,
+    command,
     config::{Config, KeyAction},
     highlighter::Highlighter,
+    log,
     theme::{Style, Theme},
     unicode,
 };
@@ -20,23 +22,28 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Action {
     // Buffer actions
-    Quit,
+    Quit(bool),
     Save,
+    SaveAs(String),
     Undo,
     UndoMultiple(Vec<Action>),
     CenterView,
 
-    // Movement
+    // Cursor movement
     MoveUp,
     MoveDown,
     MoveLeft,
     MoveRight,
-    MoveTop,
-    MoveBottom,
+    MoveToTop,
+    MoveToBottom,
     MoveToLineEnd,
     MoveToLineStart,
     MoveLineToViewCenter,
     MoveLineToViewBottom,
+    MoveViewDownOneLine,
+    MoveViewUpOneLine,
+    MoveToBottomOfBuffer,
+    MoveToTopOfBuffer,
     PageUp,
     PageDown,
 
@@ -712,20 +719,41 @@ impl Editor {
         }
     }
 
-    fn handle_command(&mut self, cmd: &str) -> Option<Action> {
+    fn handle_command(&mut self, cmd: &str) -> Vec<Action> {
+        log!("handle_command: {}", cmd);
+        self.command = String::new();
+        self.waiting_command = None;
+        self.last_error = None;
+
         if let Ok(line) = cmd.parse::<usize>() {
-            return Some(Action::GoToLine(line));
+            return vec![Action::GoToLine(line)];
         }
 
-        if cmd == "q" {
-            return Some(Action::Quit);
+        let commands = &["quit", "write"];
+
+        let parsed = command::parse(commands, cmd);
+
+        let Some(parsed) = parsed else {
+            self.last_error = Some(format!("unknown command {cmd:?}"));
+            return vec![];
+        };
+
+        let mut actions = vec![];
+        for cmd in &parsed.commands {
+            if cmd == "quit" {
+                actions.push(Action::Quit(parsed.is_forced()));
+            }
+
+            if cmd == "write" {
+                if let Some(file) = parsed.args.first() {
+                    actions.push(Action::SaveAs(file.clone()));
+                } else {
+                    actions.push(Action::Save);
+                }
+            }
         }
 
-        if cmd == "w" {
-            return Some(Action::Save);
-        }
-
-        None
+        actions
     }
 
     fn handle_waiting_command(
@@ -844,8 +872,23 @@ impl Editor {
     ) -> anyhow::Result<bool> {
         self.last_error = None;
         match action {
-            Action::Quit => return Ok(true),
+            Action::Quit(force) => {
+                if *force {
+                    return Ok(true);
+                }
+
+                self.last_error = Some(format!("Buffer has unwritten changes: "));
+                return Ok(false);
+            }
             Action::Save => match self.buffer.save() {
+                Ok(msg) => {
+                    self.last_error = Some(msg);
+                }
+                Err(e) => {
+                    self.last_error = Some(e.to_string());
+                }
+            },
+            Action::SaveAs(new_file_name) => match self.buffer.save_as(new_file_name) {
                 Ok(msg) => {
                     self.last_error = Some(msg);
                 }
@@ -869,10 +912,8 @@ impl Editor {
 
                 if distance_to_center > 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
-                    if self.vtop > distance_to_center {
-                        self.vtop += distance_to_center;
-                        self.pos_y = view_center;
-                    }
+                    self.vtop += distance_to_center;
+                    self.pos_y = view_center;
                 } else if distance_to_center < 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
                     let new_vtop = self.vtop.saturating_sub(distance_to_center);
@@ -881,6 +922,7 @@ impl Editor {
                         self.pos_y = view_center;
                     }
                 }
+                self.draw_view(buffer)?;
             }
             Action::MoveUp => {
                 if self.pos_y == 0 {
@@ -909,17 +951,21 @@ impl Editor {
             Action::MoveRight => {
                 self.pos_x += 1;
             }
-            Action::MoveTop => {
-                self.vtop = 0;
+            Action::MoveToTop => {
                 self.pos_y = 0;
             }
-            Action::MoveBottom => {
-                if self.buffer.len() > self.vheight() {
-                    self.pos_y = self.vheight() - 1;
-                    self.vtop = self.buffer.len() - self.vheight();
-                } else {
-                    self.pos_y = self.buffer.len() - 1;
-                }
+            Action::MoveToBottom => {
+                self.pos_y = self.vheight() - 1;
+            }
+            Action::MoveToTopOfBuffer => {
+                self.vtop = 0;
+                self.pos_y = 0;
+                self.draw_view(buffer)?;
+            }
+            Action::MoveToBottomOfBuffer => {
+                self.vtop = self.buffer.len() - self.vheight();
+                self.pos_y = self.vheight() - 1;
+                self.draw_view(buffer)?;
             }
             Action::MoveToLineStart => {
                 self.pos_x = 0;
@@ -957,6 +1003,28 @@ impl Editor {
                     self.pos_y = self.vheight() - 1;
                     self.draw_view(buffer)?;
                 }
+            }
+            Action::MoveViewDownOneLine => {
+                if self.vtop < self.buffer.len() - self.vheight() {
+                    self.vtop += 1;
+                    if self.pos_y > 5 {
+                        self.pos_y = self.pos_y.saturating_sub(1);
+                    } else {
+                        self.pos_y = 5;
+                    }
+                }
+                self.draw_view(buffer)?;
+            }
+            Action::MoveViewUpOneLine => {
+                if self.vtop > 0 {
+                    self.vtop = self.vtop.saturating_sub(1);
+                    if self.pos_y < self.vheight() - 7 {
+                        self.pos_y += 1;
+                    } else {
+                        self.pos_y = self.vheight() - 7
+                    }
+                }
+                self.draw_view(buffer)?;
             }
             Action::PageUp => {
                 if self.vtop > 0 {
@@ -1072,13 +1140,11 @@ impl Editor {
                 self.buffer.remove_line(*y);
             }
             Action::Command(cmd) => {
-                self.command = String::new();
-
-                if let Some(ref action) = self.handle_command(cmd) {
+                for action in self.handle_command(cmd) {
                     self.last_error = None;
-                    return self.execute(action, buffer).await;
-                } else {
-                    self.last_error = Some(format!("Not an editor command: {cmd:?}"));
+                    if self.execute(&action, buffer).await? {
+                        return Ok(true);
+                    }
                 }
             }
             Action::GoToLine(line) => {
@@ -1097,7 +1163,7 @@ impl Editor {
         pos: GoToLinePosition,
     ) -> anyhow::Result<()> {
         if line == 0 {
-            self.execute(&Action::MoveTop, buffer).await?;
+            self.execute(&Action::MoveToTop, buffer).await?;
             return Ok(());
         }
 

@@ -1,4 +1,4 @@
-theme = "tokyo-night-storm.json"
+theme = "gruvbox-dark-soft.json"
 
 log_file = "/tmp/tsu.log"
 
@@ -16,18 +16,24 @@ Esc = { EnterMode = "Normal" }
 "j" = "MoveDown"
 "h" = "MoveLeft"
 "l" = "MoveRight"
+"0" = "MoveToLineStart"
 "Home" = "MoveToLineStart"
+"$" = "MoveToLineEnd"
 "End" = "MoveToLineEnd"
 "Delete" = "DeleteCharAtCursor"
 "PageUp" = "PageUp"
 "PageDown" = "PageDown"
 "o" = [ { EnterMode = "Insert" }, "InsertLineBelow" ]
 "O" = [ { EnterMode = "Insert" }, "InsertLineAbove" ]
+"i" = { EnterMode = "Insert" }
 "d" = { "d" = "DeleteCurrentLine" }
-"g" = { "g" = "MoveTop", "h" = "MoveToLineStart", "l" = "MoveToLineEnd", "e" = "MoveBottom" }
-"z" = { "z" = "CenterView" }
+"g" = { "g" = "MoveToTopOfBuffer", "h" = "MoveToLineStart", "l" = "MoveToLineEnd", "e" = "MoveToBottomOfBuffer" }
+"G" = "MoveToBottomOfBuffer"
+"z" = { "z" = "CenterView", "t" = "MoveToTop", "b" = "MoveToBottom" }
 "u" = "Undo"
 ":" = { EnterMode = "Command" }
+"Ctrl-e" = "MoveViewDownOneLine"
+"Ctrl-y" = "MoveViewUpOneLine"
 
 [keys.command]
 Esc = { EnterMode = "Normal" }

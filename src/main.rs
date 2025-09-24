@@ -10,6 +10,7 @@ use std::{env, io::stdout, panic};
 
 mod buffer;
 mod color;
+mod command;
 mod config;
 mod editor;
 mod highlighter;
