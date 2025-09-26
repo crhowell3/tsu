@@ -22,7 +22,7 @@ tokio = { version = "1.47.1", features = ["full"] }
 toml = "0.9.7"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["fmt", "env-filter"] }
-tree-sitter = "0.20.10"
-tree-sitter-rust = "0.20.4"
+tree-sitter = "0.25.10"
+tree-sitter-rust = "0.24.0"
 unicode-segmentation = "1.12.0"
 unicode-width = "0.2.1"
