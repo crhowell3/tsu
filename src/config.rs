@@ -28,6 +28,7 @@ pub struct Keys {
 pub struct Config {
     pub keys: Keys,
     pub theme: String,
+    pub log_file: Option<String>,
     pub mouse_scroll_lines: Option<usize>,
 }
 
