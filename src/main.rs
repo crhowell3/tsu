@@ -1,35 +1,12 @@
-use crate::config::Config;
-use crate::editor::Editor;
-use crate::theme::parse_vscode_theme;
-use crate::{buffer::Buffer, logger::Logger};
-
 use clap::Parser;
 use crossterm::{ExecutableCommand, terminal};
-use once_cell::sync::OnceCell;
 use std::{env, io::stdout, panic};
 
-mod buffer;
-mod color;
-mod command;
-mod config;
-mod editor;
-mod highlighter;
-mod logger;
-mod theme;
-mod unicode;
-
-#[allow(dead_code)]
-static LOGGER: OnceCell<Logger> = OnceCell::new();
-
-#[macro_export]
-macro_rules! log {
-    ($($arg:tt)*) => {
-        {
-            let log_message = format!($($arg)*);
-            $crate::LOGGER.get_or_init(|| $crate::Logger::new("tsu.log")).log(&log_message);
-        }
-    };
-}
+use tsu::buffer::Buffer;
+use tsu::config::Config;
+use tsu::editor::Editor;
+use tsu::theme::parse_vscode_theme;
+use tsu::{LOGGER, Logger};
 
 #[derive(Parser, Debug)]
 #[clap(name = "tsu")]
@@ -54,7 +31,7 @@ struct Args {
     file: Option<String>,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let user_level = match args.verbose {
@@ -81,6 +58,12 @@ async fn main() -> anyhow::Result<()> {
 
     let toml = std::fs::read_to_string(config_file)?;
     let config: Config = toml::from_str(&toml)?;
+
+    if let Some(log_file) = &config.log_file {
+        LOGGER.get_or_init(|| Some(Logger::new(log_file)));
+    } else {
+        LOGGER.get_or_init(|| None);
+    }
 
     let buffer;
     if let Some(filename) = args.file {
