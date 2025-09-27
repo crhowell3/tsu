@@ -53,3 +53,28 @@ pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
 
     Ok(Color::Rgb { r, g, b })
 }
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn test_parse_rgb_simple() {
+        let hex_str = "#000000";
+        assert_eq!(parse_rgb(hex_str).unwrap(), Color::Rgb { r: 0, g: 0, b: 0 });
+    }
+
+    #[test]
+    fn test_parse_rgb_complex() {
+        let hex_str = "#d35a87";
+        assert_eq!(
+            parse_rgb(hex_str).unwrap(),
+            Color::Rgb {
+                r: 0xd3,
+                g: 0x5a,
+                b: 0x87
+            }
+        );
+    }
+}

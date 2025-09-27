@@ -8,6 +8,9 @@ pub mod logger;
 pub mod theme;
 pub mod unicode;
 
+#[doc(hidden)]
+pub mod ext;
+
 use once_cell::sync::OnceCell;
 
 pub use logger::Logger;
