@@ -78,6 +78,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@miri
       - run: rustup override set nightly
       - run: cargo miri setup
-      - run: cargo miri test -- --skip ffi_tests
+      - run: cargo miri test
         env:
           MIRIFLAGS: "-Zmiri-strict-provenance -Zmiri-disable-isolation"
