@@ -1,4 +1,5 @@
-use crate::editor::{Action, Editor, Mode};
+use crate::action::Action;
+use crate::editor::{Editor, Mode};
 
 /// Extension trait for Editor that provides test-specific functionality
 #[allow(async_fn_in_trait)]
@@ -75,10 +76,7 @@ impl EditorTestExt for Editor {
     }
 
     fn test_is_visual(&self) -> bool {
-        matches!(
-            self.test_mode(),
-            Mode::Visual | Mode::VisualLine | Mode::VisualBlock
-        )
+        matches!(self.test_mode(), Mode::Visual)
     }
 
     fn test_viewport_top(&self) -> usize {
@@ -91,7 +89,7 @@ impl EditorTestExt for Editor {
                 .await?;
         }
         for ch in text.chars() {
-            self.test_execute_action(Action::InsertCharAtCursorPos(ch))
+            self.test_execute_action(Action::InsertCharAtCursor(ch))
                 .await?;
         }
         Ok(())

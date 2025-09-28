@@ -1,7 +1,9 @@
 use tsu::{
+    action::Action,
     buffer::Buffer,
     config::Config,
-    editor::{Action, Editor, Mode},
+    editor::{Editor, Mode},
+    ext::EditorTestExt,
     theme::Theme,
 };
 
@@ -35,6 +37,18 @@ impl EditorWrapper {
         self.editor.test_cursor_position()
     }
 
+    pub fn mode(&self) -> Mode {
+        self.editor.test_mode()
+    }
+
+    pub fn buffer_contents(&self) -> String {
+        self.editor.test_buffer_contents()
+    }
+
+    pub fn is_normal(&self) -> bool {
+        self.editor.test_is_normal()
+    }
+
     pub fn assert_cursor_position(&self, x: usize, y: usize) {
         let (pos_x, pos_y) = self.cursor_position();
         assert_eq!(
@@ -45,6 +59,16 @@ impl EditorWrapper {
             y,
             pos_x,
             pos_y
+        );
+    }
+
+    pub fn assert_mode(&self, mode: Mode) {
+        assert_eq!(
+            self.mode(),
+            mode,
+            "Expected mode {:?}, but was {:?}",
+            mode,
+            self.mode()
         );
     }
 }

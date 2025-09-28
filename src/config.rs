@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::editor::Action;
+use crate::action::Action;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]

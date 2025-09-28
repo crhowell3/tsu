@@ -116,6 +116,23 @@ impl Buffer {
         }
     }
 
+    pub fn replace_line(&mut self, line: usize, new_line: String) {
+        if line >= self.len() {
+            return;
+        }
+
+        let start_char = self.content.line_to_char(line);
+        let end_char = if line + 1 < self.len() {
+            self.content.line_to_char(line + 1)
+        } else {
+            self.content.len_chars()
+        };
+
+        self.content.remove(start_char..end_char);
+        self.content.insert(start_char, &format!("{}\n", new_line));
+        self.dirty = true;
+    }
+
     pub fn remove_line(&mut self, line: usize) {
         if line >= self.content.len_lines() {
             return;
