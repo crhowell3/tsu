@@ -828,7 +828,7 @@ impl Editor {
                     return Ok(true);
                 }
 
-                self.last_error = Some(format!("Buffer has unwritten changes: "));
+                self.last_error = Some("Buffer has unwritten changes: ".to_string());
                 return Ok(false);
             }
             Action::Save => match self.buffer.save() {

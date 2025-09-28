@@ -89,6 +89,10 @@ impl Buffer {
         self.content.len_lines() - 1
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.content.len_lines() == 0
+    }
+
     pub fn insert(&mut self, x: usize, y: usize, c: char) {
         let char_idx = self.position_to_char_idx(x, y);
         let total_chars = self.content.len_chars();
