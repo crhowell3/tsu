@@ -12,6 +12,7 @@ pub struct EditorWrapper {
 }
 
 impl EditorWrapper {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::with_content("")
     }
@@ -41,6 +42,7 @@ impl EditorWrapper {
         self.editor.test_mode()
     }
 
+    #[allow(dead_code)]
     pub fn buffer_contents(&self) -> String {
         self.editor.test_buffer_contents()
     }
