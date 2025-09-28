@@ -10,11 +10,6 @@ pub struct Highlighter {
 }
 
 impl Highlighter {
-    #[cfg(miri)]
-    pub fn new(theme: &Theme) -> anyhow::Result<Self> {
-        Ok(())
-    }
-
     pub fn new(theme: &Theme) -> anyhow::Result<Self> {
         let mut parser = Parser::new();
         parser
