@@ -1,3 +1,4 @@
+pub mod action;
 pub mod buffer;
 pub mod color;
 pub mod command;
@@ -7,6 +8,9 @@ pub mod highlighter;
 pub mod logger;
 pub mod theme;
 pub mod unicode;
+
+#[doc(hidden)]
+pub mod ext;
 
 use once_cell::sync::OnceCell;
 

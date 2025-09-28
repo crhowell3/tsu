@@ -89,6 +89,10 @@ impl Buffer {
         self.content.len_lines() - 1
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.content.len_lines() == 0
+    }
+
     pub fn insert(&mut self, x: usize, y: usize, c: char) {
         let char_idx = self.position_to_char_idx(x, y);
         let total_chars = self.content.len_chars();
@@ -114,6 +118,23 @@ impl Buffer {
         if char_idx < self.content.len_chars() {
             self.content.remove(char_idx..char_idx + 1);
         }
+    }
+
+    pub fn replace_line(&mut self, line: usize, new_line: String) {
+        if line >= self.len() {
+            return;
+        }
+
+        let start_char = self.content.line_to_char(line);
+        let end_char = if line + 1 < self.len() {
+            self.content.line_to_char(line + 1)
+        } else {
+            self.content.len_chars()
+        };
+
+        self.content.remove(start_char..end_char);
+        self.content.insert(start_char, &format!("{}\n", new_line));
+        self.dirty = true;
     }
 
     pub fn remove_line(&mut self, line: usize) {

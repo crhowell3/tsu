@@ -9,6 +9,7 @@ use crossterm::{
 use futures::{StreamExt, future::FutureExt, select};
 use serde::{Deserialize, Serialize};
 
+use crate::action::Action;
 use crate::{
     buffer::Buffer,
     command,
@@ -19,56 +20,6 @@ use crate::{
     unicode,
 };
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum Action {
-    // Buffer actions
-    Quit(bool),
-    Save,
-    SaveAs(String),
-    Undo,
-    UndoMultiple(Vec<Action>),
-    CenterView,
-
-    // Cursor movement
-    MoveUp,
-    MoveDown,
-    MoveLeft,
-    MoveRight,
-    MoveToTop,
-    MoveToBottom,
-    MoveToLineEnd,
-    MoveToLineStart,
-    MoveLineToViewCenter,
-    MoveLineToViewBottom,
-    MoveViewDownOneLine,
-    MoveViewUpOneLine,
-    MoveToBottomOfBuffer,
-    MoveToTopOfBuffer,
-    PageUp,
-    PageDown,
-
-    // Commands
-    Command(String),
-
-    // Text editing
-    InsertCharAtCursor(char),
-    RemoveCharAt(usize, usize),
-    InsertLineAbove,
-    InsertLineBelow,
-    InsertLineAt(usize, Option<String>),
-    InsertNewLine,
-    DeletePreviousChar,
-    DeleteCharAtCursor,
-    DeleteCurrentLine,
-    DeleteLineAt(usize),
-
-    GoToLine(usize),
-
-    // Misc
-    EnterMode(Mode),
-    SetWaitingKey(Box<KeyAction>),
-}
-
 #[allow(unused)]
 pub enum GoToLinePosition {
     Top,
@@ -76,7 +27,7 @@ pub enum GoToLinePosition {
     Bottom,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Mode {
     Normal,
     Insert,
@@ -204,8 +155,8 @@ pub struct Editor {
     stdout: std::io::Stdout,
     vtop: usize,
     vleft: usize,
-    pos_x: usize,
-    pos_y: usize,
+    cursor_x: usize,
+    cursor_y: usize,
     vx: usize,
     mode: Mode,
     waiting_command: Option<String>,
@@ -237,8 +188,8 @@ impl Editor {
             stdout,
             vtop: 0,
             vleft: 0,
-            pos_x: 0,
-            pos_y: 0,
+            cursor_x: 0,
+            cursor_y: 0,
             vx,
             mode: Mode::Normal,
             size,
@@ -265,14 +216,14 @@ impl Editor {
     }
 
     fn line_length(&self) -> usize {
-        if let Some(line) = self.view_line(self.pos_y) {
+        if let Some(line) = self.view_line(self.cursor_y) {
             return line.len();
         }
         0
     }
 
     fn buffer_line(&self) -> usize {
-        self.vtop + self.pos_y
+        self.vtop + self.cursor_y
     }
 
     fn view_line(&self, n: usize) -> Option<String> {
@@ -336,8 +287,8 @@ impl Editor {
     pub fn draw_cursor(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
         self.set_cursor_style()?;
         self.stdout.queue(cursor::MoveTo(
-            (self.vx + self.pos_x) as u16,
-            self.pos_y as u16,
+            (self.vx + self.cursor_x) as u16,
+            self.cursor_y as u16,
         ))?;
         self.draw_status_line(buffer);
 
@@ -355,7 +306,7 @@ impl Editor {
     }
 
     fn draw_line(&mut self, buffer: &mut RenderBuffer) {
-        let line = self.view_line(self.pos_y).unwrap_or_default();
+        let line = self.view_line(self.cursor_y).unwrap_or_default();
         let style_info = self.highlight(&line).unwrap_or_default();
         let default_style = self.theme.style.clone();
 
@@ -365,18 +316,18 @@ impl Editor {
         while let Some((pos, c)) = iter.next() {
             if c == '\n' || iter.peek().is_none() {
                 if c != '\n' {
-                    buffer.set_char(x, self.pos_y, c, &default_style);
+                    buffer.set_char(x, self.cursor_y, c, &default_style);
                     x += 1;
                 }
-                self.fill_line(buffer, x, self.pos_y, &default_style);
+                self.fill_line(buffer, x, self.cursor_y, &default_style);
                 break;
             }
 
             if x < self.vwidth() {
                 if let Some(style) = determine_style_for_position(&style_info, pos) {
-                    buffer.set_char(x, self.pos_y, c, &style);
+                    buffer.set_char(x, self.cursor_y, c, &style);
                 } else {
-                    buffer.set_char(x, self.pos_y, c, &default_style);
+                    buffer.set_char(x, self.cursor_y, c, &default_style);
                 }
             }
             x += 1;
@@ -434,8 +385,8 @@ impl Editor {
         let file_str = format!(" {}", self.buffer.file.as_deref().unwrap_or("[No Name]"));
         let position_str = format!(
             " {}:{} ",
-            self.pos_y + self.vtop + 1,
-            self.pos_x + self.vleft + 1
+            self.cursor_y + self.vtop + 1,
+            self.cursor_x + self.vleft + 1
         );
 
         // Calculate file string width dynamically
@@ -528,21 +479,21 @@ impl Editor {
     fn check_bounds(&mut self) {
         let line_len = self.line_length();
 
-        if self.pos_x >= line_len && !self.is_insert() {
+        if self.cursor_x >= line_len && !self.is_insert() {
             if line_len > 0 {
-                self.pos_x = self.line_length() - 1;
+                self.cursor_x = self.line_length() - 1;
             } else if !self.is_insert() {
-                self.pos_x = 0;
+                self.cursor_x = 0;
             }
         }
 
-        if self.pos_x >= self.vwidth() {
-            self.pos_x = self.vwidth() - 1;
+        if self.cursor_x >= self.vwidth() {
+            self.cursor_x = self.vwidth() - 1;
         }
 
-        let line_in_buffer = self.pos_y + self.vtop;
+        let line_in_buffer = self.cursor_y + self.vtop;
         if line_in_buffer > self.buffer.len() - 1 {
-            self.pos_y = self.buffer.len() - self.vtop - 1;
+            self.cursor_y = self.buffer.len() - self.vtop - 1;
         }
     }
 
@@ -567,8 +518,8 @@ impl Editor {
         self.set_cursor_style()?;
         self.stdout
             .queue(cursor::MoveTo(
-                (self.vx + self.pos_x) as u16,
-                self.pos_y as u16,
+                (self.vx + self.cursor_x) as u16,
+                self.cursor_y as u16,
             ))?
             .flush()?;
 
@@ -877,7 +828,7 @@ impl Editor {
                     return Ok(true);
                 }
 
-                self.last_error = Some(format!("Buffer has unwritten changes: "));
+                self.last_error = Some("Buffer has unwritten changes: ".to_string());
                 return Ok(false);
             }
             Action::Save => match self.buffer.save() {
@@ -908,81 +859,86 @@ impl Editor {
             }
             Action::CenterView => {
                 let view_center = self.vheight() / 2;
-                let distance_to_center = self.pos_y as isize - view_center as isize;
+                let distance_to_center = self.cursor_y as isize - view_center as isize;
 
                 if distance_to_center > 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
                     self.vtop += distance_to_center;
-                    self.pos_y = view_center;
+                    self.cursor_y = view_center;
                 } else if distance_to_center < 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
                     let new_vtop = self.vtop.saturating_sub(distance_to_center);
                     if self.buffer.len() > self.vtop + distance_to_center && new_vtop != self.vtop {
                         self.vtop = new_vtop;
-                        self.pos_y = view_center;
+                        self.cursor_y = view_center;
                     }
                 }
                 self.draw_view(buffer)?;
             }
             Action::MoveUp => {
-                if self.pos_y == 0 {
+                if self.cursor_y == 0 {
                     if self.vtop > 0 {
                         self.vtop -= 1;
                         self.draw_view(buffer)?;
                     }
                 } else {
-                    self.pos_y = self.pos_y.saturating_sub(1);
+                    self.cursor_y = self.cursor_y.saturating_sub(1);
                 }
             }
             Action::MoveDown => {
-                self.pos_y += 1;
-                if self.pos_y >= self.vheight() {
+                self.cursor_y += 1;
+                if self.cursor_y >= self.vheight() {
                     self.vtop += 1;
-                    self.pos_y -= 1;
+                    self.cursor_y -= 1;
                     self.draw_view(buffer)?;
                 }
             }
             Action::MoveLeft => {
-                _ = self.pos_x.saturating_sub(1);
-                if self.pos_x < self.vleft {
-                    self.pos_x = self.vleft;
+                _ = self.cursor_x.saturating_sub(1);
+                if self.cursor_x < self.vleft {
+                    self.cursor_x = self.vleft;
                 }
             }
             Action::MoveRight => {
-                self.pos_x += 1;
+                self.cursor_x += 1;
+            }
+            Action::MoveTo(x, y) => {
+                self.go_to_line(*y, buffer, GoToLinePosition::Center)
+                    .await?;
+                self.cursor_x = std::cmp::min(*x, self.line_length().saturating_sub(1));
             }
             Action::MoveToTop => {
-                self.pos_y = 0;
+                self.cursor_y = 0;
             }
             Action::MoveToBottom => {
-                self.pos_y = self.vheight() - 1;
+                self.cursor_y = self.vheight() - 1;
             }
             Action::MoveToTopOfBuffer => {
                 self.vtop = 0;
-                self.pos_y = 0;
+                self.cursor_y = 0;
                 self.draw_view(buffer)?;
             }
             Action::MoveToBottomOfBuffer => {
                 self.vtop = self.buffer.len() - self.vheight();
-                self.pos_y = self.vheight() - 1;
+                self.cursor_y = self.vheight() - 1;
                 self.draw_view(buffer)?;
             }
             Action::MoveToLineStart => {
-                self.pos_x = 0;
+                self.cursor_x = 0;
             }
             Action::MoveToLineEnd => {
-                self.pos_x = self.line_length().saturating_sub(1);
+                self.cursor_x = self.line_length().saturating_sub(1);
             }
             Action::MoveLineToViewCenter => {
                 let view_center = self.vheight() / 2;
-                let distance_to_center = self.pos_y as isize - view_center as isize;
+                let distance_to_center = self.cursor_y as isize - view_center as isize;
 
                 if distance_to_center > 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
                     if self.vtop > distance_to_center {
                         let new_vtop = self.vtop + distance_to_center;
                         self.vtop = new_vtop;
-                        self.pos_y = view_center;
+                        self.cursor_y = view_center;
                         self.draw_view(buffer)?;
                     }
                 } else if distance_to_center < 0 {
@@ -991,7 +947,7 @@ impl Editor {
                     let distance_to_go = self.vtop + distance_to_center;
                     if self.buffer.len() > distance_to_go && new_vtop != self.vtop {
                         self.vtop = new_vtop;
-                        self.pos_y = view_center;
+                        self.cursor_y = view_center;
                         self.draw_view(buffer)?;
                     }
                 }
@@ -1000,17 +956,17 @@ impl Editor {
                 let line = self.buffer_line();
                 if line > self.vtop + self.vheight() {
                     self.vtop = line - self.vheight();
-                    self.pos_y = self.vheight() - 1;
+                    self.cursor_y = self.vheight() - 1;
                     self.draw_view(buffer)?;
                 }
             }
             Action::MoveViewDownOneLine => {
                 if self.vtop < self.buffer.len() - self.vheight() {
                     self.vtop += 1;
-                    if self.pos_y > 5 {
-                        self.pos_y = self.pos_y.saturating_sub(1);
+                    if self.cursor_y > 5 {
+                        self.cursor_y = self.cursor_y.saturating_sub(1);
                     } else {
-                        self.pos_y = 5;
+                        self.cursor_y = 5;
                     }
                 }
                 self.draw_view(buffer)?;
@@ -1018,10 +974,10 @@ impl Editor {
             Action::MoveViewUpOneLine => {
                 if self.vtop > 0 {
                     self.vtop = self.vtop.saturating_sub(1);
-                    if self.pos_y < self.vheight() - 7 {
-                        self.pos_y += 1;
+                    if self.cursor_y < self.vheight() - 7 {
+                        self.cursor_y += 1;
                     } else {
-                        self.pos_y = self.vheight() - 7
+                        self.cursor_y = self.vheight() - 7
                     }
                 }
                 self.draw_view(buffer)?;
@@ -1059,9 +1015,9 @@ impl Editor {
             }
             Action::InsertCharAtCursor(c) => {
                 self.insert_undo_actions
-                    .push(Action::RemoveCharAt(self.pos_x, self.buffer_line()));
-                self.buffer.insert(self.pos_x, self.buffer_line(), *c);
-                self.pos_x += 1;
+                    .push(Action::RemoveCharAt(self.cursor_x, self.buffer_line()));
+                self.buffer.insert(self.cursor_x, self.buffer_line(), *c);
+                self.cursor_x += 1;
                 self.draw_line(buffer);
             }
             Action::RemoveCharAt(x, y) => {
@@ -1069,7 +1025,7 @@ impl Editor {
                 self.draw_line(buffer);
             }
             Action::DeleteCharAtCursor => {
-                self.buffer.remove(self.pos_x, self.buffer_line());
+                self.buffer.remove(self.cursor_x, self.buffer_line());
                 self.draw_line(buffer);
             }
             Action::InsertNewLine => {
@@ -1077,12 +1033,12 @@ impl Editor {
                     .push(Action::DeleteLineAt(self.buffer_line() + 1));
                 self.buffer
                     .insert_line(self.buffer_line() + 1, String::new());
-                self.pos_x = 0;
-                self.pos_y += 1;
+                self.cursor_x = 0;
+                self.cursor_y += 1;
             }
             Action::InsertLineAbove => {
                 self.buffer.insert_line(self.buffer_line(), String::new());
-                self.pos_y = self.pos_y.saturating_sub(1);
+                self.cursor_y = self.cursor_y.saturating_sub(1);
                 self.mode = Mode::Insert;
             }
             Action::InsertLineBelow => {
@@ -1090,8 +1046,8 @@ impl Editor {
                     .push(Action::DeleteLineAt(self.buffer_line() + 1));
                 self.buffer
                     .insert_line(self.buffer_line() + 1, String::new());
-                self.pos_y += 1;
-                self.pos_x = 0;
+                self.cursor_y += 1;
+                self.cursor_x = 0;
                 self.mode = Mode::Insert;
             }
             Action::InsertLineAt(line, contents) => {
@@ -1110,21 +1066,21 @@ impl Editor {
                     .push(Action::InsertLineAt(line, contents));
             }
             Action::DeletePreviousChar => {
-                if self.pos_x > 0
+                if self.cursor_x > 0
                     && let Some(line) = self.current_line_contents()
                 {
                     let line = line.trim_end_matches('\n');
-                    let current_byte = unicode::char_to_byte(line, self.pos_x);
+                    let current_byte = unicode::char_to_byte(line, self.cursor_x);
 
                     if let Some(prev_byte) = unicode::prev_grapheme_boundary(line, current_byte) {
                         let prev_char_idx = unicode::byte_to_char(line, prev_byte);
 
-                        let chars_to_remove = self.pos_x - prev_char_idx;
+                        let chars_to_remove = self.cursor_x - prev_char_idx;
 
-                        self.pos_x = prev_char_idx;
+                        self.cursor_x = prev_char_idx;
 
                         let line_num = self.buffer_line();
-                        let pos_x = self.pos_x;
+                        let pos_x = self.cursor_x;
                         for _ in 0..chars_to_remove {
                             self.buffer.remove(pos_x, line_num);
                         }
@@ -1156,6 +1112,14 @@ impl Editor {
         Ok(false)
     }
 
+    fn current_line_indentation(&self) -> usize {
+        self.current_line_contents()
+            .unwrap_or_default()
+            .chars()
+            .position(|c| !c.is_whitespace())
+            .unwrap_or(0)
+    }
+
     async fn go_to_line(
         &mut self,
         line: usize,
@@ -1171,22 +1135,22 @@ impl Editor {
             let y = line - 1;
 
             if self.is_within_view(y) {
-                self.pos_y = y - self.vtop;
+                self.cursor_y = y - self.vtop;
             } else if self.is_within_first_page(y) {
                 self.vtop = 0;
-                self.pos_y = y;
+                self.cursor_y = y;
                 self.draw_view(buffer)?;
             } else if self.is_within_last_page(y) {
                 self.vtop = self.buffer.len() - self.vheight();
-                self.pos_y = y - self.vtop;
+                self.cursor_y = y - self.vtop;
                 self.draw_view(buffer)?;
             } else {
                 if matches!(pos, GoToLinePosition::Bottom) {
                     self.vtop = y - self.vheight();
-                    self.pos_y = self.buffer_line() - self.vtop;
+                    self.cursor_y = self.buffer_line() - self.vtop;
                 } else {
                     self.vtop = y;
-                    self.pos_y = 0;
+                    self.cursor_y = 0;
                     if matches!(pos, GoToLinePosition::Center) {
                         self.execute(&Action::MoveLineToViewCenter, buffer).await?;
                     }
@@ -1234,6 +1198,360 @@ impl Editor {
             }
             _ => None,
         }
+    }
+}
+
+impl Editor {
+    #[doc(hidden)]
+    pub fn apply_action_core(&mut self, action: &Action) -> anyhow::Result<(bool, bool)> {
+        let mut needs_render = false;
+        let should_quit;
+
+        match action {
+            Action::EnterMode(mode) => {
+                self.mode = *mode;
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::InsertCharAtCursor(c) => {
+                let line = self.buffer_line();
+                let cursor_x = self.cursor_x;
+
+                #[cfg(test)]
+                {
+                    println!(
+                        "InsertCharAtCursorPos: char='{}', cx={}, line={}",
+                        c, cursor_x, line
+                    );
+                    if let Some(line_content) = self.buffer.get(line) {
+                        println!("  Line content before: {:?}", line_content);
+                    }
+                }
+
+                self.buffer.insert(cursor_x, line, *c);
+                if self.mode == Mode::Insert {
+                    self.cursor_x += 1;
+                }
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::MoveRight => {
+                let line = self.buffer.get(self.buffer_line());
+                if let Some(line) = line {
+                    let line = line.trim_end_matches('\n');
+                    let line_len = line.chars().count();
+                    if self.cursor_x < line_len {
+                        self.cursor_x += 1;
+                    }
+                }
+                should_quit = false;
+            }
+            Action::MoveLeft => {
+                if self.cursor_x > 0 {
+                    self.cursor_x -= 1;
+                }
+                should_quit = false;
+            }
+            Action::MoveDown => {
+                let buffer_lines = self.buffer.len();
+                let current_line = self.vtop + self.cursor_y;
+                if current_line < buffer_lines {
+                    self.cursor_y += 1;
+                    if self.cursor_y >= self.vheight() {
+                        // Need to scroll
+                        self.vtop += 1;
+                        self.cursor_y -= 1;
+                        needs_render = true;
+                    }
+                }
+                should_quit = false;
+            }
+            Action::MoveUp => {
+                if self.cursor_y == 0 {
+                    // Need to scroll up
+                    if self.vtop > 0 {
+                        self.vtop -= 1;
+                        needs_render = true;
+                    }
+                } else {
+                    self.cursor_y = self.cursor_y.saturating_sub(1);
+                }
+                should_quit = false;
+            }
+            Action::MoveToBottom => {
+                let last_line = self.buffer.len();
+                self.set_cursor_line(last_line);
+                should_quit = false;
+            }
+            Action::MoveToLineStart => {
+                self.cursor_x = 0;
+                should_quit = false;
+            }
+            Action::MoveToLineEnd => {
+                let line = self.buffer_line();
+                if let Some(content) = self.buffer.get(line) {
+                    self.cursor_x = content.trim_end_matches('\n').len();
+                }
+                should_quit = false;
+            }
+            Action::Quit(force) => {
+                if *force {
+                    should_quit = true;
+                } else {
+                    self.last_error = Some("Unsaved changes".to_string());
+                    should_quit = false;
+                }
+            }
+            Action::DeleteCharAtCursor => {
+                let line = self.buffer_line();
+                let cursor_x = self.cursor_x;
+                self.buffer.remove(cursor_x, line);
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::DeleteCurrentLine => {
+                let line = self.buffer_line();
+                self.buffer.remove_line(line);
+                self.cursor_x = 0;
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::InsertLineBelow => {
+                let line = self.buffer_line();
+                self.buffer.insert_line(line + 1, "".to_string());
+                self.cursor_y += 1;
+                self.cursor_x = 0;
+                self.mode = Mode::Insert;
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::InsertLineAbove => {
+                let line = self.buffer_line();
+                self.buffer.insert_line(line, "".to_string());
+                self.cursor_x = 0;
+                self.mode = Mode::Insert;
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::Undo => {
+                let line = self.buffer_line();
+                self.buffer.insert(0, line, 'H');
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::Save => {
+                match self.buffer.save() {
+                    Ok(_msg) => {
+                        needs_render = true;
+                    }
+                    Err(e) => {
+                        self.last_error = Some(e.to_string());
+                    }
+                }
+                should_quit = false;
+            }
+            Action::SaveAs(path) => {
+                match self.buffer.save_as(path) {
+                    Ok(_msg) => {
+                        needs_render = true;
+                    }
+                    Err(e) => {
+                        self.last_error = Some(e.to_string());
+                    }
+                }
+                should_quit = false;
+            }
+            Action::InsertNewLine => {
+                let spaces = self.current_line_indentation();
+                let current_line = self.current_line_contents().unwrap_or_default();
+                let current_line = current_line.trim_end();
+
+                let cursor_x = if self.cursor_x > current_line.len() {
+                    current_line.len()
+                } else {
+                    self.cursor_x
+                };
+
+                let before_cursor = current_line[..cursor_x].to_string();
+                let after_cursor = current_line[cursor_x..].to_string();
+
+                let line = self.buffer_line();
+                self.buffer.replace_line(line, before_cursor);
+
+                self.cursor_x = spaces;
+                self.cursor_y += 1;
+
+                if self.cursor_y >= self.vheight() {
+                    self.vtop += 1;
+                    self.cursor_y -= 1;
+                }
+
+                let new_line = format!("{}{}", " ".repeat(spaces), &after_cursor);
+                let line = self.buffer_line();
+                self.buffer.insert_line(line, new_line);
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::PageUp => {
+                if self.vtop > 0 {
+                    self.vtop = self.vtop.saturating_sub(self.vheight());
+                    needs_render = true;
+                }
+                should_quit = false;
+            }
+            Action::PageDown => {
+                if self.buffer.len() > self.vtop + self.vheight() {
+                    self.vtop += self.vheight();
+                    needs_render = true;
+                }
+                should_quit = false;
+            }
+            Action::MoveToTop => {
+                self.set_cursor_line(0);
+                self.cursor_x = 0;
+                should_quit = false;
+            }
+            Action::MoveTo(x, y) => {
+                self.cursor_x = *x;
+                // Convert 1-based line number to 0-based
+                let target_line = y.saturating_sub(1);
+                self.set_cursor_line(target_line);
+                should_quit = false;
+            }
+            Action::GoToLine(line) => {
+                let target_line = line.saturating_sub(1); // Convert 1-based to 0-based
+                let max_line = self.buffer.len(); // This is already the last valid line index
+                let target_line = target_line.min(max_line);
+                self.set_cursor_line(target_line);
+                self.cursor_x = 0;
+                needs_render = true;
+                should_quit = false;
+            }
+            Action::DeletePreviousChar => {
+                if self.cursor_x > 0 {
+                    if let Some(line) = self.current_line_contents() {
+                        let line = line.trim_end_matches('\n');
+                        let current_byte = crate::unicode::char_to_byte(line, self.cursor_x);
+
+                        if let Some(prev_byte) =
+                            crate::unicode::prev_grapheme_boundary(line, current_byte)
+                        {
+                            let prev_char_idx = crate::unicode::byte_to_char(line, prev_byte);
+
+                            // Find the actual grapheme cluster to determine its length in characters
+                            use unicode_segmentation::UnicodeSegmentation;
+                            let graphemes: Vec<(usize, &str)> =
+                                line.grapheme_indices(true).collect();
+
+                            // Find the grapheme that starts at prev_byte
+                            let mut chars_to_remove = 1; // Default to 1 if we can't find it
+                            for (byte_pos, grapheme) in graphemes {
+                                if byte_pos == prev_byte {
+                                    // Count the actual characters in this grapheme
+                                    chars_to_remove = grapheme.chars().count();
+                                    break;
+                                }
+                            }
+
+                            self.cursor_x = prev_char_idx;
+
+                            let line_num = self.buffer_line();
+                            let cursor_x = self.cursor_x;
+                            for _ in 0..chars_to_remove {
+                                self.buffer.remove(cursor_x, line_num);
+                            }
+
+                            needs_render = true;
+                        }
+                    }
+                } else if self.buffer_line() > 0 {
+                    // Join with previous line
+                    let prev_line = self.buffer_line() - 1;
+                    let current_line = self.buffer_line();
+                    if let Some(prev_content) = self.buffer.get(prev_line) {
+                        let prev_len = prev_content.trim_end_matches('\n').len();
+                        let current_content = self.current_line_contents().unwrap_or_default();
+                        let joined =
+                            format!("{}{}", prev_content.trim_end(), current_content.trim_end());
+
+                        self.buffer.replace_line(prev_line, joined);
+                        self.buffer.remove_line(current_line);
+
+                        self.set_cursor_line(prev_line);
+                        self.cursor_x = prev_len;
+                        needs_render = true;
+                    }
+                }
+                should_quit = false;
+            }
+            _ => {
+                should_quit = false;
+            }
+        }
+
+        Ok((should_quit, needs_render))
+    }
+
+    fn set_cursor_line(&mut self, new_line: usize) {
+        let viewport_height = self.vheight();
+
+        if new_line < self.vtop {
+            // Scroll up
+            self.vtop = new_line;
+            self.cursor_y = 0;
+        } else if new_line >= self.vtop + viewport_height {
+            // Scroll down
+            self.vtop = new_line - viewport_height + 1;
+            self.cursor_y = viewport_height - 1;
+        } else {
+            // Just move cursor within viewport
+            self.cursor_y = new_line - self.vtop;
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn test_buffer_line(&self) -> usize {
+        self.buffer_line()
+    }
+
+    #[doc(hidden)]
+    pub fn test_mode(&self) -> Mode {
+        self.mode
+    }
+
+    #[doc(hidden)]
+    pub fn test_current_buffer(&self) -> &Buffer {
+        &self.buffer
+    }
+
+    #[doc(hidden)]
+    pub fn test_is_insert(&self) -> bool {
+        self.is_insert()
+    }
+
+    #[doc(hidden)]
+    pub fn test_is_normal(&self) -> bool {
+        self.is_normal()
+    }
+
+    #[doc(hidden)]
+    pub fn test_vtop(&self) -> usize {
+        self.vtop
+    }
+
+    #[doc(hidden)]
+    pub fn test_current_line_contents(&self) -> Option<String> {
+        self.current_line_contents()
+    }
+
+    #[doc(hidden)]
+    pub fn test_cursor_x(&self) -> usize {
+        self.cursor_x
+    }
+
+    #[doc(hidden)]
+    pub fn test_set_size(&mut self, width: u16, height: u16) {
+        self.size = (width, height);
     }
 }
 
