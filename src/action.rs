@@ -35,20 +35,25 @@ pub enum Action {
     MoveToTop,
     /// Move the cursor to the bottom of the buffer
     MoveToBottom,
+    /// Move the cursor to the end of the current line
     MoveToLineEnd,
+    /// Move the cursor to the beginning of the current line
     MoveToLineStart,
+    /// TODO
     MoveLineToViewCenter,
+    /// TODO
     MoveLineToViewBottom,
     MoveViewDownOneLine,
     MoveViewUpOneLine,
     MoveToBottomOfBuffer,
     MoveToTopOfBuffer,
 
-    // Page movement
+    /// Move the view up one "page"
     PageUp,
+    /// Move the view down one "page"
     PageDown,
 
-    // Commands
+    /// Run a command given a string input in command mode
     Command(String),
 
     // Text editing
@@ -63,9 +68,11 @@ pub enum Action {
     DeleteCurrentLine,
     DeleteLineAt(usize),
 
+    /// Go to the specified line provided in command mode
     GoToLine(usize),
 
-    // Misc
+    /// Change to mode
     EnterMode(Mode),
+    /// TODO
     SetWaitingKey(Box<KeyAction>),
 }
