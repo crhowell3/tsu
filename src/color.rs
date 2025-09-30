@@ -3,8 +3,16 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// The internal representation of a hexadecimal RGB/RGBA color
+///
+/// This internal representation serves as an intermediate representation of "color". It can be
+/// converted to and from `crossterm::style::Color::Rgb`, although it is lossy because crossterm
+/// does not have an Rgba analogue
 pub enum Color {
+    /// A standard hexadecimal color representation parameterized as red, green, and blue
     Rgb { r: u8, g: u8, b: u8 },
+    /// A hexadecimal color representation parameterized as red, green, blue, and alpha for
+    /// transparency
     Rgba { r: u8, g: u8, b: u8, a: u8 },
 }
 
@@ -32,6 +40,13 @@ impl fmt::Display for Color {
     }
 }
 
+/// Attempt to parse a hexadecimal string into a `Color`
+///
+/// # Arguments
+/// - `s`: A hexadecimal string representation of a color, i.e., "#A3D1FD"
+///
+/// # Returns
+/// - If successfully parsed, a `Color::Rgb` or `Color::Rgba`
 pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
     if !s.starts_with('#') {
         anyhow::bail!("Invalid hex string: {}", s);
