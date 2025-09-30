@@ -25,6 +25,19 @@ impl Buffer {
     /// # Arguments
     /// - `file`: Optional file path
     /// - `contents`: String representation of the contents of the associated file
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tsu::buffer::Buffer;
+    ///
+    /// let file = Some("some_file.rs".to_string());
+    /// let contents = "";
+    ///
+    /// let buffer = Buffer::new(file.clone(), contents.to_string());
+    ///
+    /// assert_eq!(buffer.file, file);
+    /// ```
     pub fn new(file: Option<String>, contents: String) -> Self {
         let contents = if contents.is_empty() {
             "\n".to_string()
@@ -43,6 +56,27 @@ impl Buffer {
     ///
     /// # Arguments
     /// - `file`: An optional file path
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tsu::buffer::Buffer;
+    ///
+    /// # use std::fs::{self, File};
+    /// # use std::io::Write;
+    /// # use std::env;
+    ///
+    /// # tokio_test::block_on(async {
+    /// # let dir = env::temp_dir();
+    /// # let file_path = dir.join("some_file.rs");
+    /// # let mut file = File::create(&file_path).unwrap();
+    /// let file_path_str = Some(file_path.clone().into_os_string().into_string().unwrap());
+    /// let buffer = Buffer::from_file(file_path_str.clone()).await.unwrap();
+    /// assert_eq!(buffer.file, file_path_str);
+    ///
+    /// # std::fs::remove_file(file_path).unwrap();
+    /// # })
+    /// ```
     pub async fn from_file(file: Option<String>) -> anyhow::Result<Self> {
         match &file {
             Some(file) => {
