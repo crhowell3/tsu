@@ -3,15 +3,38 @@ use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 #[allow(dead_code)]
+/// Calculates the width of the string when displayed in the terminal
+///
+/// # Arguments
+/// - `s`: Some string of which the display width will be calculated
+///
+/// # Returns
+/// - The width of the input string when it is displayed in the terminal
 pub fn display_width(s: &str) -> usize {
     s.width()
 }
 
 #[allow(dead_code)]
+/// Calculates the width of the char when displayed in the terminal
+///
+/// # Arguments
+/// - `c`: Some character of which the diplay width will be calculated
+///
+/// # Returns
+/// - The width of the input character when it is displayed in the terminal
 pub fn char_display_width(c: char) -> usize {
     c.width().unwrap_or(0)
 }
 
+/// Convert a character to a byte representation
+///
+/// # Arguments
+/// -`line`: A line from which the character will be retrieved
+/// - `char_idx`: The index of the character relative to its position within the provided line
+///
+/// # Returns
+/// - The byte representation of the retrieved character if the given index is within the bounds of
+///   the provided line (i.e., less than the line length)
 pub fn char_to_byte(line: &str, char_idx: usize) -> usize {
     line.char_indices()
         .nth(char_idx)
@@ -19,11 +42,30 @@ pub fn char_to_byte(line: &str, char_idx: usize) -> usize {
         .unwrap_or(line.len())
 }
 
+/// Convert a byte to a character representation
+///
+/// # Arguments
+/// - `line`: A line from with the byte will be retrieved
+/// - `byte_offset`: The byte offset of the byte relative to its position within the provided line
+///
+/// # Returns
+/// - The character representation of the retrieved byte if the given byte offset is within the
+///   bounds of the provided line (i.e., less than the line length)
 pub fn byte_to_char(line: &str, byte_offset: usize) -> usize {
     let byte_offset = byte_offset.min(line.len());
     line[..byte_offset].chars().count()
 }
 
+/// Query the byte boundary of the previous grapheme in a given string
+///
+/// # Arguments
+/// - `s`: A string containing the grapheme in question
+/// - `byte_offset`: The byte offset of the grapheme succeeding the grapheme of interest
+///
+/// # Returns
+/// - The byte boundary of the grapheme preceding the grapheme corresponding to the byte offset
+///   provided if the byte offset is within the bounds of the string, i.e., less than the length of
+///   the string
 pub fn prev_grapheme_boundary(s: &str, byte_offset: usize) -> Option<usize> {
     let graphemes: Vec<(usize, &str)> = s.grapheme_indices(true).collect();
 

@@ -6,15 +6,22 @@ use crate::action::Action;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
+/// Representation of the types of key actions
 pub enum KeyAction {
+    /// No key action
     None,
+    /// A single key action corresponding to an `Action`
     Single(Action),
+    /// Multiple key actions corresponding to multiple `Action`s
     Multiple(Vec<Action>),
+    /// Key actions wrapped inside other key actions
     Nested(HashMap<String, KeyAction>),
+    /// A single key action repeated n times
     Repeating(u16, Box<KeyAction>),
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
+/// Maps keys to `KeyAction`s
 pub struct Keys {
     #[serde(default)]
     pub normal: HashMap<String, KeyAction>,
@@ -25,14 +32,23 @@ pub struct Keys {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
+/// Pseudo-schema for the configuration file format
 pub struct Config {
+    /// Mapping of keys to their corresponding key actions
     pub keys: Keys,
+    /// Path to theme file to use
     pub theme: String,
+    /// Optional path to log file
     pub log_file: Option<String>,
+    /// Optionally increase the amount of lines scrolled per mouse scroll
     pub mouse_scroll_lines: Option<usize>,
 }
 
 impl Config {
+    /// Construct the path to the configuration file
+    ///
+    /// # Arguments
+    /// - `p`: Name of the configuration file
     pub fn path(p: &str) -> PathBuf {
         std::env::home_dir()
             .unwrap()

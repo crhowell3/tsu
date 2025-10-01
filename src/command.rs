@@ -1,21 +1,44 @@
 #[derive(Debug, PartialEq)]
+/// Enumeration of possible command flags
+///
+/// Represents command modifier flags. At the moment, the only modifier is the Force flag ("!")
 pub enum CommandFlag {
+    /// The modifier flag which tells the command parser that the command should be executed with
+    /// force, typically bypassing certain safeguards
     Force,
 }
 
 #[derive(Debug, Default, PartialEq)]
+/// Representation of a tsu command
+///
+/// A command that has been parsed from user input in Command mode
 pub struct ParsedCommand {
+    /// The list of commands to execute
     pub commands: Vec<String>,
+    /// The list of arguments that correspond with the provided commands
     pub args: Vec<String>,
+    /// Modifier flags
     pub flags: Vec<CommandFlag>,
 }
 
 impl ParsedCommand {
+    /// Checks if the command has the Force modifier
+    ///
+    /// # Returns
+    /// - `true` if the command has the Force modifier, `false` if otherwise
     pub fn is_forced(&self) -> bool {
         self.flags.contains(&CommandFlag::Force)
     }
 }
 
+/// Attempt to parse a command
+///
+/// # Arguments
+/// - `commands`:
+/// - `input`:
+///
+/// # Returns
+/// - `Some(ParsedCommand)` if parsing is successful, otherwise `None`
 pub fn parse(commands: &[&str], input: &str) -> Option<ParsedCommand> {
     let (flags, input) = parse_flags(input);
     let mut parts = input.splitn(2, ' ');
@@ -37,6 +60,13 @@ pub fn parse(commands: &[&str], input: &str) -> Option<ParsedCommand> {
     })
 }
 
+/// Check for flags and parse them appropriately
+///
+/// # Arguments
+/// - `input`:
+///
+/// # Returns
+/// - A tuple consisting of a vector of command flags as well as the remaining input string
 fn parse_flags(input: &str) -> (Vec<CommandFlag>, &str) {
     if let Some(input) = input.strip_suffix("!") {
         (vec![CommandFlag::Force], input)
@@ -45,6 +75,14 @@ fn parse_flags(input: &str) -> (Vec<CommandFlag>, &str) {
     }
 }
 
+/// Parse commands given user input
+///
+/// # Arguments
+/// - `commands`:
+/// - `input`:
+///
+/// # Returns
+/// - A vector of parsed commands represented as strings
 fn parse_commands(commands: &[&str], input: &str) -> Vec<String> {
     for command in commands {
         if &input == command {
