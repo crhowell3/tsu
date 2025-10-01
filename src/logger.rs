@@ -10,10 +10,18 @@ use std::{
 ///
 /// A coarser representation of the standard software log severity levels
 pub enum LogLevel {
+    /// For messages that contain information normally of use only when debugging a program
     Debug = 0,
+    /// Confirmation that the program is working as expected
     Info = 1,
+    /// Elevated notice that something may not be working correctly
     Warn = 2,
+    /// Indication that some failure has occurred, but it does not break the system
     Error = 3,
+    /// Hard device error
+    Critical = 4,
+    /// A panic condition wherein the program cannot continue
+    Emergency = 5,
 }
 
 impl fmt::Display for LogLevel {
@@ -23,6 +31,8 @@ impl fmt::Display for LogLevel {
             LogLevel::Info => write!(f, "INFO"),
             LogLevel::Warn => write!(f, "WARN"),
             LogLevel::Error => write!(f, "ERROR"),
+            LogLevel::Critical => write!(f, "CRITICAL"),
+            LogLevel::Emergency => write!(f, "EMERGENCY"),
         }
     }
 }
@@ -41,6 +51,8 @@ impl LogLevel {
             "INFO" => Some(LogLevel::Info),
             "WARN" => Some(LogLevel::Warn),
             "ERROR" => Some(LogLevel::Error),
+            "CRITICAL" => Some(LogLevel::Critical),
+            "EMERGENCY" => Some(LogLevel::Emergency),
             _ => None,
         }
     }
@@ -149,5 +161,23 @@ impl Logger {
     ///
     pub fn error(&self, message: &str) {
         self.log_with_level(LogLevel::Error, message);
+    }
+
+    /// Write a critical log
+    ///
+    /// # Arguments
+    /// - `message`: The message to log to the log file
+    ///
+    pub fn critical(&self, message: &str) {
+        self.log_with_level(LogLevel::Critical, message);
+    }
+
+    /// Write an emergency log
+    ///
+    /// # Arguments
+    /// - `message`: The message to log to the log file
+    ///
+    pub fn emergency(&self, message: &str) {
+        self.log_with_level(LogLevel::Emergency, message);
     }
 }
