@@ -16,6 +16,7 @@ use once_cell::sync::OnceCell;
 
 pub use logger::Logger;
 
+/// Logger singleton
 pub static LOGGER: OnceCell<Option<Logger>> = OnceCell::new();
 
 #[macro_export]

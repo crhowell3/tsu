@@ -3,13 +3,24 @@ use tree_sitter_rust::HIGHLIGHTS_QUERY;
 
 use crate::{editor::StyleInfo, theme::Theme};
 
+/// Contains the data and logic for performing syntax highlighting when opening certain file types
 pub struct Highlighter {
+    /// The syntax parser for tokenizing and highlighting
     parser: Parser,
+    /// Result of querying the language of the file
     query: Query,
+    /// Color theme to use for applying highlighting
     theme: Theme,
 }
 
 impl Highlighter {
+    /// Construct a new `Highlighter` with a given theme
+    ///
+    /// # Arguments
+    /// - `theme`: The color theme to use for applying highlighting
+    ///
+    /// # Returns
+    /// - An instance of a `Highlighter` struct
     pub fn new(theme: &Theme) -> anyhow::Result<Self> {
         let mut parser = Parser::new();
         parser
@@ -25,6 +36,13 @@ impl Highlighter {
         })
     }
 
+    /// Executes the highlighting functionality on some string
+    ///
+    /// # Arguments
+    /// - `code`: The string to be highlighted
+    ///
+    /// # Returns
+    /// - A vector of `StyleInfo` which is used by the terminal to highlight/decorate the text
     pub fn highlight(&mut self, code: &str) -> anyhow::Result<Vec<StyleInfo>> {
         let tree = self.parser.parse(code, None).expect("parse works");
 

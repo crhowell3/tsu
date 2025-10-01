@@ -32,6 +32,13 @@ impl ParsedCommand {
 }
 
 /// Attempt to parse a command
+///
+/// # Arguments
+/// - `commands`:
+/// - `input`:
+///
+/// # Returns
+/// - `Some(ParsedCommand)` if parsing is successful, otherwise `None`
 pub fn parse(commands: &[&str], input: &str) -> Option<ParsedCommand> {
     let (flags, input) = parse_flags(input);
     let mut parts = input.splitn(2, ' ');
@@ -54,6 +61,12 @@ pub fn parse(commands: &[&str], input: &str) -> Option<ParsedCommand> {
 }
 
 /// Check for flags and parse them appropriately
+///
+/// # Arguments
+/// - `input`:
+///
+/// # Returns
+/// - A tuple consisting of a vector of command flags as well as the remaining input string
 fn parse_flags(input: &str) -> (Vec<CommandFlag>, &str) {
     if let Some(input) = input.strip_suffix("!") {
         (vec![CommandFlag::Force], input)
@@ -63,6 +76,13 @@ fn parse_flags(input: &str) -> (Vec<CommandFlag>, &str) {
 }
 
 /// Parse commands given user input
+///
+/// # Arguments
+/// - `commands`:
+/// - `input`:
+///
+/// # Returns
+/// - A vector of parsed commands represented as strings
 fn parse_commands(commands: &[&str], input: &str) -> Vec<String> {
     for command in commands {
         if &input == command {
