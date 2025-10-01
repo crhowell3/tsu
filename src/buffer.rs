@@ -190,6 +190,7 @@ impl Buffer {
         } else {
             self.content.insert_char(char_idx, c);
         }
+        self.dirty = true;
     }
 
     /// Insert a line at the specified line index (row)
@@ -204,6 +205,7 @@ impl Buffer {
             self.content.line_to_char(line)
         };
         self.content.insert(char_idx, &format!("{}\n", content));
+        self.dirty = true;
     }
 
     /// Remove a character at the specified coordinates
@@ -216,6 +218,7 @@ impl Buffer {
         if char_idx < self.content.len_chars() {
             self.content.remove(char_idx..char_idx + 1);
         }
+        self.dirty = true;
     }
 
     /// Replaces the line at a given line index with a new String
@@ -257,6 +260,7 @@ impl Buffer {
         };
 
         self.content.remove(start_char..end_char);
+        self.dirty = true;
     }
 
     /// Calculates the view inside the buffer using a specified view top and view height
