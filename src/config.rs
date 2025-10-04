@@ -45,10 +45,14 @@ pub struct Config {
 }
 
 impl Config {
+    #[must_use]
     /// Construct the path to the configuration file
     ///
     /// # Arguments
     /// - `p`: Name of the configuration file
+    ///
+    /// # Panics
+    /// This function might panic if querying the home directory returns an `Err`
     pub fn path(p: &str) -> PathBuf {
         std::env::home_dir()
             .unwrap()

@@ -8,6 +8,7 @@ use crossterm::{
 };
 use futures::{StreamExt, future::FutureExt, select};
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::action::Action;
 use crate::{
@@ -44,6 +45,7 @@ pub struct StyleInfo {
 }
 
 impl StyleInfo {
+    #[must_use]
     pub fn contains(&self, pos: usize) -> bool {
         pos >= self.start && pos < self.end
     }
@@ -70,16 +72,10 @@ impl RenderBuffer {
 
         for line in contents {
             for c in line.chars() {
-                cells.push(Cell {
-                    c,
-                    style: style.clone(),
-                });
+                cells.push(Cell { c, style });
             }
             for _ in 0..width.saturating_sub(line.len()) {
-                cells.push(Cell {
-                    c: ' ',
-                    style: style.clone(),
-                });
+                cells.push(Cell { c: ' ', style });
             }
         }
 
@@ -94,7 +90,7 @@ impl RenderBuffer {
         let cells = vec![
             Cell {
                 c: ' ',
-                style: default_style.clone(),
+                style: default_style,
             };
             width * height
         ];
@@ -108,19 +104,13 @@ impl RenderBuffer {
 
     fn set_char(&mut self, x: usize, y: usize, c: char, style: &Style) {
         let pos = (y * self.width) + x;
-        self.cells[pos] = Cell {
-            c,
-            style: style.clone(),
-        };
+        self.cells[pos] = Cell { c, style: *style };
     }
 
     fn set_text(&mut self, x: usize, y: usize, text: &str, style: &Style) {
         let pos = (y * self.width) + x;
         for (i, c) in text.chars().enumerate() {
-            self.cells[pos + i] = Cell {
-                c,
-                style: style.clone(),
-            }
+            self.cells[pos + i] = Cell { c, style: *style }
         }
     }
 
@@ -168,6 +158,21 @@ pub struct Editor {
 }
 
 impl Editor {
+    /// Creates a new editor with a given size
+    ///
+    /// # Arguments
+    /// - `width`: The desired width of the editor viewport
+    /// - `height`: The desired height of the editor viewport
+    /// - `config`: A configuration constructed from a parsed config file
+    /// - `theme`: A theme for coloring, styling, and decorating the editor
+    /// - `buffer`: A buffer which will contain the contents of the file being edited
+    ///
+    /// # Errors
+    /// Can return errors if `width` and `height` are larger than `u16::MAX` or if creating a new
+    /// `Highlighter` with the provided `theme` fails
+    ///
+    /// # Panics
+    /// This function may panic if `width` and `height` are larger than `u16::MAX`
     pub fn with_size(
         width: usize,
         height: usize,
@@ -177,7 +182,9 @@ impl Editor {
     ) -> anyhow::Result<Self> {
         let stdout = std::io::stdout();
         let vx = buffer.len().to_string().len() + 2;
-        let size = (width as u16, height as u16);
+        let w = u16::try_from(width).expect("value too large to fit in u16");
+        let h = u16::try_from(height).expect("value too large to fit in u16");
+        let size = (w, h);
         let highlighter = Highlighter::new(&theme)?;
 
         Ok(Self {
@@ -202,6 +209,15 @@ impl Editor {
         })
     }
 
+    /// Creates a new editor with a configuration, theme, and buffer
+    ///
+    /// # Arguments
+    /// - `config`: A configuration constructed from a parsed config file
+    /// - `theme`: A theme for coloring, styling, and decorating the editor
+    /// - `buffer`: A buffer which will contain the contents of the file being edited
+    ///
+    /// # Errors
+    /// Can return an `IoError` if the call to query the terminal's size fails
     pub fn new(config: Config, theme: Theme, buffer: Buffer) -> anyhow::Result<Self> {
         let size = terminal::size()?;
         Self::with_size(size.0 as usize, size.1 as usize, config, theme, buffer)
@@ -235,7 +251,6 @@ impl Editor {
         self.stdout.queue(match self.waiting_key_action {
             Some(_) => cursor::SetCursorStyle::SteadyUnderScore,
             _ => match self.mode {
-                Mode::Normal => cursor::SetCursorStyle::DefaultUserShape,
                 Mode::Insert => cursor::SetCursorStyle::SteadyBar,
                 _ => cursor::SetCursorStyle::DefaultUserShape,
             },
@@ -274,7 +289,7 @@ impl Editor {
             buffer.set_text(
                 0,
                 n,
-                &format!("{text:>width$} ", width = width),
+                &format!("{text:>width$} "),
                 &Style {
                     foreground: Some(foreground),
                     background: Some(background),
@@ -284,17 +299,37 @@ impl Editor {
         }
     }
 
+    /// Draws the cursor based on current style and position
+    ///
+    /// # Arguments
+    /// - `buffer`: The buffer containing the cursor
+    ///
+    /// # Errors
+    /// Can return an error if `set_cursor_style` fails or if the stdout queue fails to move the
+    /// cursor
+    ///
+    /// # Panics
+    /// This function might panic if the numeric values of the cursor's target (x, y) position
+    /// exceed `u16::MAX`
     pub fn draw_cursor(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
         self.set_cursor_style()?;
         self.stdout.queue(cursor::MoveTo(
-            (self.vx + self.cursor_x) as u16,
-            self.cursor_y as u16,
+            u16::try_from(self.vx + self.cursor_x).expect("value too large to fit in u16"),
+            u16::try_from(self.cursor_y).expect("value too large to fit in u16"),
         ))?;
         self.draw_status_line(buffer);
 
         Ok(())
     }
 
+    /// Wrapper for the editor's highlighter functionality
+    ///
+    /// # Arguments
+    /// - `code`: The contents of a file represented as a string and assumed to be "code", i.e.,
+    ///   pertaining to a programming language supported by the tree sitter
+    ///
+    /// # Errors
+    /// Could potentially return an error if the highlighter throws an error
     pub fn highlight(&mut self, code: &str) -> anyhow::Result<Vec<StyleInfo>> {
         self.highlighter.highlight(code)
     }
@@ -308,7 +343,7 @@ impl Editor {
     fn draw_line(&mut self, buffer: &mut RenderBuffer) {
         let line = self.view_line(self.cursor_y).unwrap_or_default();
         let style_info = self.highlight(&line).unwrap_or_default();
-        let default_style = self.theme.style.clone();
+        let default_style = self.theme.style;
 
         let mut x = self.vx;
         let mut iter = line.chars().enumerate().peekable();
@@ -334,11 +369,18 @@ impl Editor {
         }
     }
 
+    /// Draws the main view within the editor buffer
+    ///
+    /// # Arguments
+    /// - `buffer`: The buffer containing the view
+    ///
+    /// # Errors
+    /// May return an error if the highlighter fails
     pub fn draw_view(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
         let vbuffer = self.buffer.view(self.vtop, self.vheight());
         let style_info = self.highlight(&vbuffer)?;
         let vheight = self.vheight();
-        let default_style = self.theme.style.clone();
+        let default_style = self.theme.style;
 
         let mut x = self.vx;
         let mut y = 0;
@@ -380,6 +422,15 @@ impl Editor {
         Ok(())
     }
 
+    /// Draws the status line at the bottom of the editor view
+    ///
+    /// # Arguments
+    /// - `buffer`: The buffer containing the status line
+    ///
+    /// # Panics
+    /// This function may panic if the lengths of the mode and position strings exceed `u16::MAX`,
+    /// which is currently impossible for the mode string but is not necessarily impossible for the
+    /// position string
     pub fn draw_status_line(&mut self, buffer: &mut RenderBuffer) {
         let mode_str = format!(" {:?} ", self.mode).to_uppercase();
         let file_str = format!(" {}", self.buffer.file.as_deref().unwrap_or("[No Name]"));
@@ -390,7 +441,11 @@ impl Editor {
         );
 
         // Calculate file string width dynamically
-        let file_str_width = self.size.0 - mode_str.len() as u16 - position_str.len() as u16 - 2;
+        let mode_string_length =
+            u16::try_from(mode_str.len()).expect("value too large to fit in u16");
+        let position_string_length =
+            u16::try_from(position_str.len()).expect("value too large to fit in u16");
+        let file_str_width = self.size.0 - mode_string_length - position_string_length - 2;
         let y = self.size.1 as usize - 2;
 
         let transition_style = Style {
@@ -499,11 +554,11 @@ impl Editor {
 
     fn render_diff(&mut self, change_set: Vec<Change>) -> anyhow::Result<()> {
         for change in change_set {
-            let x = change.x;
-            let y = change.y;
+            let x = u16::try_from(change.x).expect("value too large to fit in u16");
+            let y = u16::try_from(change.y).expect("value too large to fit in u16");
             let cell = change.cell;
 
-            self.stdout.queue(cursor::MoveTo(x as u16, y as u16))?;
+            self.stdout.queue(cursor::MoveTo(x, y))?;
             if let Some(background) = cell.style.background {
                 self.stdout
                     .queue(style::SetBackgroundColor(background.into()))?;
@@ -518,8 +573,8 @@ impl Editor {
         self.set_cursor_style()?;
         self.stdout
             .queue(cursor::MoveTo(
-                (self.vx + self.cursor_x) as u16,
-                self.cursor_y as u16,
+                u16::try_from(self.vx + self.cursor_x).expect("value too large to fit in u16"),
+                u16::try_from(self.cursor_y).expect("value too large to fit in u16"),
             ))?
             .flush()?;
 
@@ -537,7 +592,7 @@ impl Editor {
 
         let mut current_style = &self.theme.style;
 
-        for cell in buffer.cells.iter() {
+        for cell in &buffer.cells {
             if cell.style != *current_style {
                 if let Some(background) = cell.style.background {
                     self.stdout
@@ -559,6 +614,11 @@ impl Editor {
         Ok(())
     }
 
+    /// Executes the primary run loop for the application
+    ///
+    /// # Errors
+    /// Can return an error if any failures occur with enabling raw mode in the terminal or
+    /// executing some command to stdout
     pub async fn run(&mut self) -> anyhow::Result<()> {
         terminal::enable_raw_mode()?;
         self.stdout
@@ -566,11 +626,8 @@ impl Editor {
             .execute(terminal::EnterAlternateScreen)?
             .execute(terminal::Clear(terminal::ClearType::All))?;
 
-        let mut buffer = RenderBuffer::new(
-            self.size.0 as usize,
-            self.size.1 as usize,
-            self.theme.style.clone(),
-        );
+        let mut buffer =
+            RenderBuffer::new(self.size.0 as usize, self.size.1 as usize, self.theme.style);
 
         self.render(&mut buffer)?;
 
@@ -591,7 +648,7 @@ impl Editor {
                                 buffer = RenderBuffer::new(
                                     self.size.0 as usize,
                                     self.size.1 as usize,
-                                    self.theme.style.clone(),
+                                    self.theme.style,
                                 );
                                 self.render(&mut buffer)?;
                                 continue;
@@ -772,6 +829,7 @@ impl Editor {
         None
     }
 
+    #[allow(clippy::unused_self)]
     fn handle_visual_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
         if let Event::Key(event) = ev {
             let code = event.code;
@@ -787,6 +845,7 @@ impl Editor {
         None
     }
 
+    #[allow(clippy::unused_self)]
     fn handle_replace_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
         if let Event::Key(event) = ev {
             let code = event.code;
@@ -802,6 +861,10 @@ impl Editor {
         None
     }
 
+    /// Safely cleans up the terminal before exiting
+    ///
+    /// # Errors
+    /// Can return an error if any of the subfunctions fail
     pub fn cleanup(&mut self) -> anyhow::Result<()> {
         self.stdout
             .execute(terminal::LeaveAlternateScreen)?
@@ -815,6 +878,7 @@ impl Editor {
         self.buffer.get(self.buffer_line())
     }
 
+    #[allow(clippy::too_many_lines)]
     #[async_recursion::async_recursion]
     async fn execute(
         &mut self,
@@ -863,7 +927,11 @@ impl Editor {
             }
             Action::CenterView => {
                 let view_center = self.vheight() / 2;
-                let distance_to_center = self.cursor_y as isize - view_center as isize;
+                let cursor_y = isize::try_from(self.cursor_y)
+                    .expect("value of cursor_y will not fit in isize");
+                let vc = isize::try_from(view_center)
+                    .expect("value of view_center will not fit in isize");
+                let distance_to_center = cursor_y - vc;
 
                 if distance_to_center > 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
@@ -935,7 +1003,11 @@ impl Editor {
             }
             Action::MoveLineToViewCenter => {
                 let view_center = self.vheight() / 2;
-                let distance_to_center = self.cursor_y as isize - view_center as isize;
+                let cursor_y = isize::try_from(self.cursor_y)
+                    .expect("value of cursor_y will not fit in isize");
+                let vc = isize::try_from(view_center)
+                    .expect("value of view_center will not fit in isize");
+                let distance_to_center = cursor_y - vc;
 
                 if distance_to_center > 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
@@ -981,7 +1053,7 @@ impl Editor {
                     if self.cursor_y < self.vheight() - 7 {
                         self.cursor_y += 1;
                     } else {
-                        self.cursor_y = self.vheight() - 7
+                        self.cursor_y = self.vheight() - 7;
                     }
                 }
                 self.draw_view(buffer)?;
@@ -1035,21 +1107,19 @@ impl Editor {
             Action::InsertNewLine => {
                 self.insert_undo_actions
                     .push(Action::DeleteLineAt(self.buffer_line() + 1));
-                self.buffer
-                    .insert_line(self.buffer_line() + 1, String::new());
+                self.buffer.insert_line(self.buffer_line() + 1, "");
                 self.cursor_x = 0;
                 self.cursor_y += 1;
             }
             Action::InsertLineAbove => {
-                self.buffer.insert_line(self.buffer_line(), String::new());
+                self.buffer.insert_line(self.buffer_line(), "");
                 self.cursor_y = self.cursor_y.saturating_sub(1);
                 self.mode = Mode::Insert;
             }
             Action::InsertLineBelow => {
                 self.undoable_actions
                     .push(Action::DeleteLineAt(self.buffer_line() + 1));
-                self.buffer
-                    .insert_line(self.buffer_line() + 1, String::new());
+                self.buffer.insert_line(self.buffer_line() + 1, "");
                 self.cursor_y += 1;
                 self.cursor_x = 0;
                 self.mode = Mode::Insert;
@@ -1058,7 +1128,7 @@ impl Editor {
                 self.undoable_actions
                     .push(Action::DeleteLineAt(self.buffer_line()));
                 if let Some(contents) = contents {
-                    self.buffer.insert_line(*line, contents.to_string());
+                    self.buffer.insert_line(*line, &contents.to_string());
                 }
             }
             Action::DeleteCurrentLine => {
@@ -1109,7 +1179,7 @@ impl Editor {
             }
             Action::GoToLine(line) => {
                 self.go_to_line(*line, buffer, GoToLinePosition::Center)
-                    .await?
+                    .await?;
             }
         }
 
@@ -1178,6 +1248,7 @@ impl Editor {
         y < self.vheight()
     }
 
+    #[allow(clippy::unused_self)]
     fn event_to_key_action(
         &self,
         mappings: &HashMap<String, KeyAction>,
@@ -1207,6 +1278,7 @@ impl Editor {
 
 impl Editor {
     #[doc(hidden)]
+    #[allow(clippy::too_many_lines)]
     pub fn apply_action_core(&mut self, action: &Action) -> anyhow::Result<(bool, bool)> {
         let mut needs_render = false;
         let should_quit;
@@ -1322,7 +1394,7 @@ impl Editor {
             }
             Action::InsertLineBelow => {
                 let line = self.buffer_line();
-                self.buffer.insert_line(line + 1, "".to_string());
+                self.buffer.insert_line(line + 1, "");
                 self.cursor_y += 1;
                 self.cursor_x = 0;
                 self.mode = Mode::Insert;
@@ -1331,7 +1403,7 @@ impl Editor {
             }
             Action::InsertLineAbove => {
                 let line = self.buffer_line();
-                self.buffer.insert_line(line, "".to_string());
+                self.buffer.insert_line(line, "");
                 self.cursor_x = 0;
                 self.mode = Mode::Insert;
                 needs_render = true;
@@ -1380,7 +1452,7 @@ impl Editor {
                 let after_cursor = current_line[cursor_x..].to_string();
 
                 let line = self.buffer_line();
-                self.buffer.replace_line(line, before_cursor);
+                self.buffer.replace_line(line, &before_cursor);
 
                 self.cursor_x = spaces;
                 self.cursor_y += 1;
@@ -1392,7 +1464,7 @@ impl Editor {
 
                 let new_line = format!("{}{}", " ".repeat(spaces), &after_cursor);
                 let line = self.buffer_line();
-                self.buffer.insert_line(line, new_line);
+                self.buffer.insert_line(line, &new_line);
                 needs_render = true;
                 should_quit = false;
             }
@@ -1443,7 +1515,6 @@ impl Editor {
                             let prev_char_idx = crate::unicode::byte_to_char(line, prev_byte);
 
                             // Find the actual grapheme cluster to determine its length in characters
-                            use unicode_segmentation::UnicodeSegmentation;
                             let graphemes: Vec<(usize, &str)> =
                                 line.grapheme_indices(true).collect();
 
@@ -1478,7 +1549,7 @@ impl Editor {
                         let joined =
                             format!("{}{}", prev_content.trim_end(), current_content.trim_end());
 
-                        self.buffer.replace_line(prev_line, joined);
+                        self.buffer.replace_line(prev_line, &joined);
                         self.buffer.remove_line(current_line);
 
                         self.set_cursor_line(prev_line);
@@ -1514,41 +1585,49 @@ impl Editor {
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_buffer_line(&self) -> usize {
         self.buffer_line()
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_mode(&self) -> Mode {
         self.mode
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_current_buffer(&self) -> &Buffer {
         &self.buffer
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_is_insert(&self) -> bool {
         self.is_insert()
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_is_normal(&self) -> bool {
         self.is_normal()
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_vtop(&self) -> usize {
         self.vtop
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_current_line_contents(&self) -> Option<String> {
         self.current_line_contents()
     }
 
     #[doc(hidden)]
+    #[must_use]
     pub fn test_cursor_x(&self) -> usize {
         self.cursor_x
     }
@@ -1564,7 +1643,7 @@ fn determine_style_for_position(style_info: &[StyleInfo], pos: usize) -> Option<
         .iter()
         .find(|style_info| style_info.contains(pos))
     {
-        return Some(s.style.clone());
+        return Some(s.style);
     }
 
     None

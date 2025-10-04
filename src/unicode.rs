@@ -3,6 +3,7 @@ use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 #[allow(dead_code)]
+#[must_use]
 /// Calculates the width of the string when displayed in the terminal
 ///
 /// # Arguments
@@ -15,6 +16,7 @@ pub fn display_width(s: &str) -> usize {
 }
 
 #[allow(dead_code)]
+#[must_use]
 /// Calculates the width of the char when displayed in the terminal
 ///
 /// # Arguments
@@ -26,6 +28,7 @@ pub fn char_display_width(c: char) -> usize {
     c.width().unwrap_or(0)
 }
 
+#[must_use]
 /// Convert a character to a byte representation
 ///
 /// # Arguments
@@ -38,10 +41,10 @@ pub fn char_display_width(c: char) -> usize {
 pub fn char_to_byte(line: &str, char_idx: usize) -> usize {
     line.char_indices()
         .nth(char_idx)
-        .map(|(idx, _)| idx)
-        .unwrap_or(line.len())
+        .map_or(line.len(), |(idx, _)| idx)
 }
 
+#[must_use]
 /// Convert a byte to a character representation
 ///
 /// # Arguments
@@ -56,6 +59,7 @@ pub fn byte_to_char(line: &str, byte_offset: usize) -> usize {
     line[..byte_offset].chars().count()
 }
 
+#[must_use]
 /// Query the byte boundary of the previous grapheme in a given string
 ///
 /// # Arguments

@@ -22,6 +22,7 @@ pub struct ParsedCommand {
 }
 
 impl ParsedCommand {
+    #[must_use]
     /// Checks if the command has the Force modifier
     ///
     /// # Returns
@@ -31,6 +32,7 @@ impl ParsedCommand {
     }
 }
 
+#[must_use]
 /// Attempt to parse a command
 ///
 /// # Arguments
@@ -45,7 +47,7 @@ pub fn parse(commands: &[&str], input: &str) -> Option<ParsedCommand> {
     let input = parts.next()?;
     let args = parts
         .next()
-        .map(|s| s.split(' ').map(|s| s.to_string()).collect())
+        .map(|s| s.split(' ').map(ToString::to_string).collect())
         .unwrap_or_default();
     let commands = parse_commands(commands, input);
 
@@ -86,14 +88,14 @@ fn parse_flags(input: &str) -> (Vec<CommandFlag>, &str) {
 fn parse_commands(commands: &[&str], input: &str) -> Vec<String> {
     for command in commands {
         if &input == command {
-            return vec![command.to_string()];
+            return vec![(*command).to_string()];
         }
     }
 
     let mut result = Vec::new();
     for c in input.chars() {
         if let Some(command) = commands.iter().find(|cmd| cmd.starts_with(c)) {
-            result.push(command.to_string());
+            result.push((*command).to_string());
         }
     }
 

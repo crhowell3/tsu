@@ -38,6 +38,7 @@ impl fmt::Display for LogLevel {
 }
 
 impl LogLevel {
+    #[must_use]
     /// Converts a string into a corresponding log severity level
     ///
     /// # Arguments
@@ -67,11 +68,14 @@ pub struct Logger {
 }
 
 impl Logger {
+    #[must_use]
     /// Create a new logger with a given log file path
     ///
     /// # Arguments
     /// - `file`: A path to a file to which logs will be written
     ///
+    /// # Panics
+    /// This function might panic if opening the log file returns an `Err`
     pub fn new(file: &str) -> Self {
         let file = OpenOptions::new()
             .create(true)
@@ -101,9 +105,11 @@ impl Logger {
     /// # Arguments
     /// - `message`: A message string to log to the log file
     ///
+    /// # Panics
+    /// This function might panic if it fails to get a lock on the file mutex
     pub fn log(&self, message: &str) {
         let mut file = self.file.lock().unwrap();
-        writeln!(file, "{}", message).expect("write to file works");
+        writeln!(file, "{message}").expect("write to file works");
     }
 
     /// Log a message with a specified log level
@@ -112,6 +118,8 @@ impl Logger {
     /// - `level`: The log level of the message
     /// - `message`: The message to log to the log file
     ///
+    /// # Panics
+    /// This function might panic if retrieving the duration since the Unix epoch fails
     pub fn log_with_level(&self, level: LogLevel, message: &str) {
         if level < self.log_level {
             return;
@@ -121,10 +129,10 @@ impl Logger {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let formatted = format!("[{}] [{}] {}", timestamp, level, message);
+        let formatted = format!("[{timestamp}] [{level}] {message}");
 
         let mut file = self.file.lock().unwrap();
-        writeln!(file, "{}", formatted).expect("write to file works");
+        writeln!(file, "{formatted}").expect("write to file works");
     }
 
     /// Write a debug log

@@ -58,7 +58,7 @@ static SYNTAX_HIGHLIGHTING_MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy
 fn translate_scope(theme_scope: String) -> String {
     SYNTAX_HIGHLIGHTING_MAP
         .get(&theme_scope.as_str())
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .unwrap_or(theme_scope)
 }
 
@@ -140,6 +140,22 @@ struct VSCodeTheme {
     token_colors: Vec<VSCodeTokenColor>,
 }
 
+#[allow(clippy::too_many_lines)]
+/// Attempts to parse a theme file using visual studio code theme schema
+///
+/// # Arguments
+/// - `file`: Path to the theme file to be parsed
+///
+/// # Returns
+/// - A `Theme` if the parse is successful
+///
+/// # Errors
+/// Can fail if the provided file cannot be read from or if `serde_json` is not able to deserialize
+/// the contents of the file
+///
+/// # Panics
+/// This function might panic if a hex string within the file is not able to be parsed into a
+/// `Color::Rgb`
 pub fn parse_vscode_theme(file: &str) -> anyhow::Result<Theme> {
     let contents = std::fs::read_to_string(file)?;
     let vscode_theme: VSCodeTheme = serde_json::from_str(&contents)?;
@@ -154,7 +170,7 @@ pub fn parse_vscode_theme(file: &str) -> anyhow::Result<Theme> {
 
     let token_styles = token_colors_with_scope
         .into_iter()
-        .map(|tc| tc.try_into())
+        .map(TryInto::try_into)
         .collect::<Result<Vec<TokenStyle>, _>>()?;
 
     let gutter_style = Style {

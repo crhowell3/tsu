@@ -20,6 +20,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    #[must_use]
     /// Create a new buffer using a file path and some file contents
     ///
     /// # Arguments
@@ -52,6 +53,7 @@ impl Buffer {
         }
     }
 
+    #[allow(clippy::unused_async)]
     /// Create a new buffer by opening a file and retrieving its contents
     ///
     /// # Arguments
@@ -77,12 +79,15 @@ impl Buffer {
     /// # std::fs::remove_file(file_path).unwrap();
     /// # })
     /// ```
+    ///
+    /// # Errors
+    /// Can return an `IoError` if the file cannot be read from
     pub async fn from_file(file: Option<String>) -> anyhow::Result<Self> {
         match &file {
             Some(file) => {
                 let path = Path::new(file);
                 if !path.exists() {
-                    return Err(anyhow::anyhow!("file {:?} not found", file));
+                    return Err(anyhow::anyhow!("file {file} not found"));
                 }
 
                 let contents = std::fs::read_to_string(file)?;
@@ -100,6 +105,7 @@ impl Buffer {
         }
     }
 
+    #[must_use]
     /// Returns the entirety of the content as a String
     ///
     /// # Returns
@@ -112,6 +118,9 @@ impl Buffer {
     ///
     /// # Returns
     /// - A message to print to the command line of the editor
+    ///
+    /// # Errors
+    /// Can return an `IoError` if it fails to write the contents to the provided file
     pub fn save(&self) -> anyhow::Result<String> {
         if let Some(file) = &self.file {
             let contents = self.contents();
@@ -130,6 +139,9 @@ impl Buffer {
     ///
     /// # Returns
     /// - A message to print to the command line of the editor
+    ///
+    /// # Errors
+    /// Can return an `IoError` if it fails to write the contents to the provided file
     pub fn save_as(&mut self, new_file_name: &str) -> anyhow::Result<String> {
         let contents = self.contents();
         std::fs::write(new_file_name, &contents)?;
@@ -144,6 +156,7 @@ impl Buffer {
         Ok(message)
     }
 
+    #[must_use]
     /// Retrieves the contents at a specific line in the buffer
     ///
     /// # Arguments
@@ -159,6 +172,7 @@ impl Buffer {
         Some(self.content.line(line).to_string())
     }
 
+    #[must_use]
     /// Get the length of the buffer, i.e., the number of lines
     ///
     /// # Returns
@@ -167,6 +181,7 @@ impl Buffer {
         self.content.len_lines() - 1
     }
 
+    #[must_use]
     /// Check if the buffer is empty, i.e., the number of lines is 0
     ///
     /// # Returns
@@ -198,13 +213,13 @@ impl Buffer {
     /// # Arguments
     /// - `line`: The line index where the contents will be inserted
     /// - `content`: The string to insert at the specified row
-    pub fn insert_line(&mut self, line: usize, content: String) {
+    pub fn insert_line(&mut self, line: usize, content: &str) {
         let char_idx = if line >= self.content.len_lines() {
             self.content.len_chars()
         } else {
             self.content.line_to_char(line)
         };
-        self.content.insert(char_idx, &format!("{}\n", content));
+        self.content.insert(char_idx, &format!("{content}\n"));
         self.dirty = true;
     }
 
@@ -216,7 +231,7 @@ impl Buffer {
     pub fn remove(&mut self, x: usize, y: usize) {
         let char_idx = self.position_to_char_idx(x, y);
         if char_idx < self.content.len_chars() {
-            self.content.remove(char_idx..char_idx + 1);
+            self.content.remove(char_idx..=char_idx);
         }
         self.dirty = true;
     }
@@ -226,7 +241,7 @@ impl Buffer {
     /// # Arguments
     /// - `line`: The index of the line being replaced
     /// - `new_line`: The String to be written to the line index
-    pub fn replace_line(&mut self, line: usize, new_line: String) {
+    pub fn replace_line(&mut self, line: usize, new_line: &str) {
         if line >= self.len() {
             return;
         }
@@ -239,7 +254,7 @@ impl Buffer {
         };
 
         self.content.remove(start_char..end_char);
-        self.content.insert(start_char, &format!("{}\n", new_line));
+        self.content.insert(start_char, &format!("{new_line}\n"));
         self.dirty = true;
     }
 
@@ -263,6 +278,7 @@ impl Buffer {
         self.dirty = true;
     }
 
+    #[must_use]
     /// Calculates the view inside the buffer using a specified view top and view height
     ///
     /// # Arguments
