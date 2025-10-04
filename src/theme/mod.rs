@@ -17,6 +17,7 @@ pub struct Theme {
 }
 
 impl Theme {
+    #[must_use]
     pub fn get_style(&self, scope: &str) -> Option<Style> {
         self.token_styles.iter().find_map(|token_style| {
             if token_style.scope.contains(&scope.to_string()) {
@@ -28,6 +29,7 @@ impl Theme {
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn get_selection_background(&self) -> Color {
         self.selection_style
             .as_ref()
@@ -86,6 +88,7 @@ pub struct Style {
 
 impl Style {
     #[allow(dead_code)]
+    #[must_use]
     pub fn fallback_background(&self, fallback_background: &Style) -> Style {
         let background = self
             .background
@@ -95,6 +98,7 @@ impl Style {
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn with_background(&self, background: Option<Color>) -> Style {
         Style {
             background,
@@ -103,6 +107,7 @@ impl Style {
     }
 
     #[allow(dead_code)]
+    #[must_use]
     pub fn inverted(&self) -> Style {
         Style {
             foreground: self.background,
