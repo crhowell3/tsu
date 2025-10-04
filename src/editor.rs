@@ -282,6 +282,8 @@ impl Editor {
             let line_number = n + 1 + self.vtop;
             let text = if line_number <= self.buffer.len() {
                 line_number.to_string()
+            } else if line_number <= self.buffer.len() + 1 {
+                "~".to_string()
             } else {
                 " ".repeat(width)
             };
@@ -706,6 +708,7 @@ impl Editor {
     ) -> anyhow::Result<()> {
         self.stdout.execute(cursor::Hide)?;
         self.draw_status_line(buffer);
+        self.draw_gutter(buffer);
         self.draw_command_line(buffer);
         self.render_diff(buffer.diff(current_buffer))?;
         self.draw_cursor(buffer)?;
@@ -1110,6 +1113,13 @@ impl Editor {
                 self.buffer.insert_line(self.buffer_line() + 1, "");
                 self.cursor_x = 0;
                 self.cursor_y += 1;
+
+                if self.cursor_y >= self.vheight() - 5 {
+                    self.vtop += 1;
+                    self.cursor_y -= 1;
+                }
+
+                self.render(buffer)?;
             }
             Action::InsertLineAbove => {
                 self.buffer.insert_line(self.buffer_line(), "");
