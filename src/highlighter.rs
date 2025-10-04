@@ -21,6 +21,14 @@ impl Highlighter {
     ///
     /// # Returns
     /// - An instance of a `Highlighter` struct
+    ///
+    /// # Errors
+    /// This function will return a `LanguageError` if the tree sitter's parser is unable to set a
+    /// language
+    ///
+    /// # Panics
+    /// This function might panic if the value returned by `set_langauge` is an `Err`, with a panic
+    /// message including the passed message, and the content of the `Err`
     pub fn new(theme: &Theme) -> anyhow::Result<Self> {
         let mut parser = Parser::new();
         parser
@@ -43,6 +51,13 @@ impl Highlighter {
     ///
     /// # Returns
     /// - A vector of `StyleInfo` which is used by the terminal to highlight/decorate the text
+    ///
+    /// # Errors
+    /// There does not appear to be any function call within this code that returns an error, so
+    /// this function should not return an `Err`
+    ///
+    /// # Panics
+    /// This function might panic if the `colors` vector size exceeds `isize::MAX`
     pub fn highlight(&mut self, code: &str) -> anyhow::Result<Vec<StyleInfo>> {
         let tree = self.parser.parse(code, None).expect("parse works");
 

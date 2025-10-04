@@ -21,7 +21,7 @@ impl Theme {
     pub fn get_style(&self, scope: &str) -> Option<Style> {
         self.token_styles.iter().find_map(|token_style| {
             if token_style.scope.contains(&scope.to_string()) {
-                Some(token_style.style.clone())
+                Some(token_style.style)
             } else {
                 None
             }
@@ -78,7 +78,7 @@ pub struct StatusLineStyle {
     pub inner_style: Style,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Style {
     pub foreground: Option<Color>,
     pub background: Option<Color>,
@@ -102,7 +102,7 @@ impl Style {
     pub fn with_background(&self, background: Option<Color>) -> Style {
         Style {
             background,
-            ..self.clone()
+            ..(*self)
         }
     }
 

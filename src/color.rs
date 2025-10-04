@@ -25,8 +25,9 @@ impl Default for Color {
 impl From<Color> for crossterm::style::Color {
     fn from(color: Color) -> Self {
         match color {
-            Color::Rgb { r, g, b } => crossterm::style::Color::Rgb { r, g, b },
-            Color::Rgba { r, g, b, a: _ } => crossterm::style::Color::Rgb { r, g, b },
+            Color::Rgb { r, g, b } | Color::Rgba { r, g, b, a: _ } => {
+                crossterm::style::Color::Rgb { r, g, b }
+            }
         }
     }
 }
@@ -34,8 +35,8 @@ impl From<Color> for crossterm::style::Color {
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Color::Rgb { r, g, b } => write!(f, "#{:02x}{:02x}{:02x}", r, g, b),
-            Color::Rgba { r, g, b, a } => write!(f, "#{:02x}{:02x}{:02x}{:02x}", r, g, b, a),
+            Color::Rgb { r, g, b } => write!(f, "#{r:02x}{g:02x}{b:02x}"),
+            Color::Rgba { r, g, b, a } => write!(f, "#{r:02x}{g:02x}{b:02x}{a:02x}"),
         }
     }
 }
@@ -47,19 +48,20 @@ impl fmt::Display for Color {
 ///
 /// # Returns
 /// - If successfully parsed, a `Color::Rgb` or `Color::Rgba`
+///
+/// # Errors
+/// Can return a `ParseIntError` if it fails to convert any of the color channel strings into a
+/// base 16 number
 pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
     if !s.starts_with('#') {
-        anyhow::bail!("Invalid hex string: {}", s);
+        anyhow::bail!("Invalid hex string: {s}");
     }
 
     let hex = s.trim_start_matches('#');
     let len = hex.len();
 
     if len != 6 && len != 8 {
-        anyhow::bail!(
-            "Hex string must be in the format #RRGGBB or #RRGGBBAA instead of {}",
-            s
-        );
+        anyhow::bail!("Hex string must be in the format #RRGGBB or #RRGGBBAA instead of {s}");
     }
 
     let r = u8::from_str_radix(&hex[0..2], 16)?;

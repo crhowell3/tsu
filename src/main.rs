@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
         _ = stdout().execute(terminal::LeaveAlternateScreen);
         _ = terminal::disable_raw_mode();
 
-        eprintln!("{}", info);
+        eprintln!("{info}");
     }));
 
     let result = editor.run().await;
