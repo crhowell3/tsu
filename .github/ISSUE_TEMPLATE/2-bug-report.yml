@@ -5,17 +5,17 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for submitting a bug report. It helps make Terebinth better.
+        Thank you for submitting a bug report. It helps make tsu better.
 
-        Make sure you are running the [latest](https://bun.sh/docs/installation#upgrading) version of the Terebinth interpreter.
+        Make sure you are running the [latest](https://github.com/crhowell3/tsu/releases/latest) version of tsu.
         The bug you are experiencing may already have been fixed.
 
         Please try to include as much information as possible.
 
   - type: input
     attributes:
-      label: What version of Terebinth is running?
-      description: Check the version in your Cargo.toml
+      label: What version of tsu is running?
+      description: Run `tsu --version`
   - type: input
     attributes:
       label: What platform is your computer?

@@ -1,0 +1,38 @@
+table {
+    width: 100%;
+}
+
+table thead th {
+    padding: .75rem;
+    text-align: left;
+    font-weight: 500;
+    line-height: 1.5;
+    width: auto;
+}
+
+table td {
+    padding: .75rem;
+    border: none;
+}
+
+table thead tr {
+    border: none;
+    border-bottom: 2px var(--table-border-color) solid;
+}
+
+table tbody tr {
+    border-bottom: 1px var(--table-border-line) solid;
+}
+
+table tbody tr:nth-child(2n) {
+    background: unset;
+}
+
+.content h1,
+.content h2,
+.content h3,
+.content h4 {
+    font-weight: 600;
+    margin-top: 1.275em;
+    margin-bottom: .875em;
+}
