@@ -3,5 +3,7 @@
 [tsu](README.md)
 
 - [Installation](installation.md)
-- [Getting Started](getting-started.md)
+- [Usage](usage.md)
+  - [Keymap](usage/keymap.md)
+  - [Commands](usage/commands.md)
 - [Get in Touch](get-in-touch.md)
