@@ -1145,9 +1145,10 @@ impl Editor {
                 let line = self.buffer_line();
                 let contents = self.current_line_contents();
 
-                self.buffer.remove_line(self.buffer_line());
+                self.buffer.remove_line(line);
                 self.undoable_actions
                     .push(Action::InsertLineAt(line, contents));
+                self.render(buffer)?;
             }
             Action::DeletePreviousChar => {
                 if self.cursor_x > 0
@@ -1178,6 +1179,7 @@ impl Editor {
             }
             Action::DeleteLineAt(y) => {
                 self.buffer.remove_line(*y);
+                self.render(buffer)?;
             }
             Action::Command(cmd) => {
                 for action in self.handle_command(cmd) {
