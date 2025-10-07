@@ -8,6 +8,8 @@ pub mod highlighter;
 pub mod logger;
 pub mod theme;
 pub mod unicode;
+pub mod window;
+pub mod window_manager;
 
 #[doc(hidden)]
 pub mod ext;

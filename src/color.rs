@@ -71,6 +71,29 @@ pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
     Ok(Color::Rgb { r, g, b })
 }
 
+pub fn blend_color(foreground: Color, background: Color) -> Color {
+    match (foreground, background) {
+        (
+            Color::Rgba { r, g, b, a },
+            Color::Rgb {
+                r: background_r,
+                g: background_g,
+                b: background_b,
+            },
+        ) => {
+            let alpha = a as f32 / 255.0;
+            let inv_alpha = 1.0 - alpha;
+
+            let r = (r as f32 * alpha + background_r as f32 * inv_alpha) as u8;
+            let g = (g as f32 * alpha + background_g as f32 * inv_alpha) as u8;
+            let b = (b as f32 * alpha + background_b as f32 * inv_alpha) as u8;
+
+            Color::Rgb { r, g, b }
+        }
+        _ => foreground,
+    }
+}
+
 #[cfg(test)]
 mod test {
 

@@ -82,6 +82,19 @@ pub fn prev_grapheme_boundary(s: &str, byte_offset: usize) -> Option<usize> {
     None
 }
 
+#[must_use]
+/// Convert a character index to a column index within the view
+///
+/// # Arguments
+/// - `line`: The string of the line containing the character in question
+/// - `char_idx`: The index of the character in the provided line
+///
+/// # Returns
+/// - The column index of the character based on its index within the line
+pub fn char_to_column(line: &str, char_idx: usize) -> usize {
+    line.chars().take(char_idx).map(char_display_width).sum()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

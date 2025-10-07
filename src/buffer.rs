@@ -157,6 +157,16 @@ impl Buffer {
     }
 
     #[must_use]
+    pub fn name(&self) -> &str {
+        self.file.as_deref().unwrap_or("[No name]")
+    }
+
+    #[must_use]
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    #[must_use]
     /// Retrieves the contents at a specific line in the buffer
     ///
     /// # Arguments
