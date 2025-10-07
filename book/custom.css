@@ -36,3 +36,106 @@ table tbody tr:nth-child(2n) {
     margin-top: 1.275em;
     margin-bottom: .875em;
 }
+
+.gruvbox {
+    --bg: #282828;
+    --fg: #ebdbb2;
+    --heading-fg: #fff;
+
+    --sidebar-bg: #3c3836;
+    --sidebar-fg: #ebdbb2;
+    --sidebar-non-existant: #7c6f64;
+    --sidebar-active: #fe8019;
+    --scrollbar: var(--sidebar-fg);
+
+    --icons: #d3869b;
+    --icons-hover: #83a598;
+
+    --links: #fe8019;
+
+    --inline-code-color: #d3869b;
+
+    --theme-popup-bg: #3c3836;
+    --theme-popup-border: #5f5a60;
+    --theme-hover: rgba(0, 0, 0, .2);
+
+    --quote-bg: #1d2021;
+    --quote-border: #282828;
+
+    --table-border-color: #3c3836;
+    --table-header-bg: hsla(226, 23%, 31%, 0);
+    --table-alternate-bg: hsl(226, 23%, 14%);
+    --table-border-line: #3c3836;
+
+    --searchbar-border-color: #1d2021;
+    --searchbar-bg: #1d2021;
+    --searchbar-fg: #ebdbb2;
+    --searchbar-shadow-color: #aaa;
+    --searchresults-header-fg: #ebdbb2;
+    --searchresults-border-color: #feceb454;
+    --search-mark-bg: #d3869bba;
+
+}
+
+.gruvbox .content .header {
+    color: #fce2d4;
+}
+
+/* highlight.js theme, :where() is used to avoid increasing specificity */
+
+:where(.gruvbox) .hljs {
+    background: #282828;
+    color: #ebdbb2;
+}
+
+:where(.gruvbox) .hljs-comment,
+:where(.gruvbox) .hljs-quote {
+    color: #6F5D63;
+}
+
+:where(.gruvbox) .hljs-link,
+:where(.gruvbox) .hljs-meta,
+:where(.gruvbox) .hljs-name,
+:where(.gruvbox) .hljs-regexp,
+:where(.gruvbox) .hljs-selector-class,
+:where(.gruvbox) .hljs-selector-id,
+:where(.gruvbox) .hljs-tag,
+:where(.gruvbox) .hljs-template-variable,
+:where(.gruvbox) .hljs-variable {
+    color: #fe8019;
+}
+
+:where(.gruvbox) .hljs-built_in,
+:where(.gruvbox) .hljs-deletion,
+:where(.gruvbox) .hljs-literal,
+:where(.gruvbox) .hljs-number,
+:where(.gruvbox) .hljs-params,
+:where(.gruvbox) .hljs-type {
+    color: #d3869b;
+}
+
+:where(.gruvbox) .hljs-attribute,
+:where(.gruvbox) .hljs-section,
+:where(.gruvbox) .hljs-title {
+    color: #fb4934;
+}
+
+:where(.gruvbox) .hljs-addition,
+:where(.gruvbox) .hljs-bullet,
+:where(.gruvbox) .hljs-string,
+:where(.gruvbox) .hljs-symbol {
+    color: #b8bb26;
+}
+
+:where(.gruvbox) .hljs-keyword,
+:where(.gruvbox) .hljs-selector-tag {
+    color: #83a598;
+}
+
+:where(.gruvbox) .hljs-emphasis {
+    font-style: italic;
+}
+
+:where(.gruvbox) .hljs-strong {
+    font-weight: 700;
+}
