@@ -1,25 +1,30 @@
-use std::{any, io::Write};
+use std::io::Write;
 
 use crossterm::{
     QueueableCommand as _,
-    cursor::{self, MoveTo},
-    style, terminal,
+    cursor::{self},
+    style,
 };
 
 use crate::{
-    editor::{Change, determine_style_for_position},
-    theme::{self, Style},
+    color::Color,
+    debug,
+    editor::{Mode, determine_style_for_position, render_buffer::Change},
+    theme::Style,
     unicode::char_display_width,
 };
 
-use super::{Editor, Mode, RenderBuffer};
+use super::{Editor, render_buffer::RenderBuffer};
 
 impl Editor {
     pub fn render(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
         self.update_gutter_width();
         let current_buffer = buffer.clone();
 
-        self.render_window(buffer, 0)?;
+        let window_count = self.window_manager.windows().len();
+        for window_id in 0..window_count {
+            self.render_window(buffer, window_id)?;
+        }
 
         self.render_decorations(buffer)?;
 
@@ -30,8 +35,6 @@ impl Editor {
     }
 
     fn render_window(&mut self, buffer: &mut RenderBuffer, window_id: usize) -> anyhow::Result<()> {
-        use crate::log;
-
         let window_data = {
             let windows = self.window_manager.windows();
             let window_count = windows.len();
@@ -46,6 +49,33 @@ impl Editor {
             self.render_main_content_in_window(buffer, &window)?;
             if window_id < window_count - 1 {
                 self.render_window_separator(buffer, &window)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn render_window_separator(
+        &mut self,
+        buffer: &mut RenderBuffer,
+        window: &crate::window::Window,
+    ) -> anyhow::Result<()> {
+        let separator_style = Style {
+            foreground: Some(Color::Rgb {
+                r: 100,
+                g: 100,
+                b: 100,
+            }),
+            background: None,
+            bold: false,
+            italic: false,
+        };
+
+        let x = window.position.x + window.size.0;
+        if x < self.size.0 as usize {
+            for y in 0..window.size.1 {
+                let terminal_y = self.window_to_terminal_y(window, y);
+                buffer.set_char(x, terminal_y, '|', &separator_style, &self.theme);
             }
         }
 
@@ -92,8 +122,6 @@ impl Editor {
         buffer: &mut RenderBuffer,
         window: &crate::window::Window,
     ) -> anyhow::Result<()> {
-        use crate::log;
-
         let width = self.gutter_width();
         let gutter_style = self
             .theme
@@ -237,6 +265,7 @@ impl Editor {
     /// position string
     pub fn draw_status_line(&mut self, buffer: &mut RenderBuffer) {
         let mode = format!(" {:?} ", self.mode).to_uppercase();
+        debug!("Mode: {mode}");
 
         let active_window = self.window_manager.active_window();
         let (file, position, window_indicator) = if let Some(window) = active_window {
@@ -403,5 +432,17 @@ impl Editor {
 
     fn update_gutter_width(&mut self) {
         self.vx = self.gutter_width() + 1;
+    }
+
+    fn set_cursor_style(&mut self) -> anyhow::Result<()> {
+        self.stdout.queue(match self.waiting_key_action {
+            Some(_) => cursor::SetCursorStyle::SteadyUnderScore,
+            _ => match self.mode {
+                Mode::Insert => cursor::SetCursorStyle::SteadyBar,
+                _ => cursor::SetCursorStyle::DefaultUserShape,
+            },
+        })?;
+
+        Ok(())
     }
 }

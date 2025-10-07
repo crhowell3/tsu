@@ -25,7 +25,7 @@ impl EditorWrapper {
     pub fn with_buffer(buffer: Buffer) -> Self {
         let config = Config::default();
         let theme = Theme::default();
-        let editor = Editor::with_size(80, 24, config, theme, buffer).unwrap();
+        let editor = Editor::with_size(80, 24, config, theme, vec![buffer]).unwrap();
 
         Self { editor }
     }

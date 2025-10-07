@@ -32,3 +32,15 @@ macro_rules! log {
         }
     };
 }
+
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.debug(&log_message);
+            }
+        }
+    };
+}

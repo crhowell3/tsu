@@ -1,5 +1,3 @@
-use std::thread::current;
-
 use crate::{editor::Point, window::Window};
 
 #[derive(Debug, Clone)]
@@ -162,5 +160,16 @@ impl WindowManager {
 
     pub fn active_window_id(&self) -> usize {
         self.active_window_id
+    }
+
+    pub fn set_active(&mut self, window_id: usize) {
+        for window in self.root.windows_mut() {
+            window.active = false;
+        }
+
+        if let Some(window) = self.root.windows_mut().get_mut(window_id) {
+            window.active = true;
+            self.active_window_id = window_id;
+        }
     }
 }

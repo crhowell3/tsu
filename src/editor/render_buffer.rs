@@ -110,14 +110,20 @@ impl RenderBuffer {
         };
     }
 
-    fn set_text(&mut self, x: usize, y: usize, text: &str, style: &Style) {
+    pub fn set_text(&mut self, x: usize, y: usize, text: &str, style: &Style) {
         let pos = (y * self.width) + x;
         for (i, c) in text.chars().enumerate() {
+            if x + i >= self.width {
+                break;
+            }
+            if pos + i >= self.cells.len() {
+                break;
+            }
             self.cells[pos + i] = Cell { c, style: *style }
         }
     }
 
-    fn diff(&self, other: &RenderBuffer) -> Vec<Change<'_>> {
+    pub fn diff(&self, other: &RenderBuffer) -> Vec<Change<'_>> {
         let mut changes = vec![];
         for (pos, cell) in self.cells.iter().enumerate() {
             if *cell != other.cells[pos] {

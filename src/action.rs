@@ -63,6 +63,9 @@ pub enum Action {
     InsertLineBelow,
     InsertLineAt(usize, Option<String>),
     InsertNewLine,
+
+    ReplaceLineAt(usize, String),
+
     DeletePreviousChar,
     DeleteCharAtCursor,
     DeleteCurrentLine,

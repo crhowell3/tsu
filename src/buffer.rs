@@ -2,6 +2,8 @@ use std::path::Path;
 
 use ropey::Rope;
 
+use crate::unicode::column_to_char;
+
 #[derive(Debug)]
 /// The internal representation of an opened file
 ///
@@ -17,6 +19,8 @@ pub struct Buffer {
     content: Rope,
     /// State flag for keeping track of unsaved (dirty) changes
     pub dirty: bool,
+    pub position: (usize, usize),
+    pub vtop: usize,
 }
 
 impl Buffer {
@@ -50,6 +54,8 @@ impl Buffer {
             file,
             content: Rope::from_str(&contents),
             dirty: false,
+            position: (0, 0),
+            vtop: 0,
         }
     }
 
@@ -121,10 +127,11 @@ impl Buffer {
     ///
     /// # Errors
     /// Can return an `IoError` if it fails to write the contents to the provided file
-    pub fn save(&self) -> anyhow::Result<String> {
+    pub fn save(&mut self) -> anyhow::Result<String> {
         if let Some(file) = &self.file {
             let contents = self.contents();
             std::fs::write(file, &contents)?;
+            self.dirty = false;
             let message = format!("{:?} {}L, {}B written", file, self.len(), contents.len());
             Ok(message)
         } else {
@@ -197,7 +204,7 @@ impl Buffer {
     /// # Returns
     /// - True if the buffer is empty, false otherwise
     pub fn is_empty(&self) -> bool {
-        self.content.len_lines() == 0
+        self.content.len_bytes() == 0
     }
 
     /// Put a character at a coordinate position within the buffer
@@ -223,7 +230,7 @@ impl Buffer {
     /// # Arguments
     /// - `line`: The line index where the contents will be inserted
     /// - `content`: The string to insert at the specified row
-    pub fn insert_line(&mut self, line: usize, content: &str) {
+    pub fn insert_line(&mut self, line: usize, content: String) {
         let char_idx = if line >= self.content.len_lines() {
             self.content.len_chars()
         } else {
@@ -251,7 +258,7 @@ impl Buffer {
     /// # Arguments
     /// - `line`: The index of the line being replaced
     /// - `new_line`: The String to be written to the line index
-    pub fn replace_line(&mut self, line: usize, new_line: &str) {
+    pub fn replace_line(&mut self, line: usize, new_line: String) {
         if line >= self.len() {
             return;
         }
@@ -333,6 +340,15 @@ impl Buffer {
         let x = x.min(line_chars_no_newline);
 
         line_start_char + x
+    }
+
+    pub fn column_to_char_index(&self, column: usize, y: usize) -> usize {
+        if let Some(line) = self.get(y) {
+            let line = line.trim_end_matches('\n');
+            column_to_char(line, column)
+        } else {
+            0
+        }
     }
 }
 
