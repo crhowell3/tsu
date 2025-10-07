@@ -232,8 +232,8 @@ impl Buffer {
         let char_idx = self.position_to_char_idx(x, y);
         if char_idx < self.content.len_chars() {
             self.content.remove(char_idx..=char_idx);
+            self.dirty = true;
         }
-        self.dirty = true;
     }
 
     /// Replaces the line at a given line index with a new String
