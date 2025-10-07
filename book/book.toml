@@ -1,0 +1,12 @@
+[book]
+authors = ["Cameron Howell"]
+language = "en"
+multilingual = false
+src = "src"
+
+[output.html]
+default-theme = "mocha"
+preferred-dark-theme = "mocha"
+git-repository-url = "https://github.com/crhowell3/tsu"
+edit-url-template = "https://github.com/crhowell3/tsu/edit/main/book/{path}"
+additional-css = ["./theme/catppuccin.css"]
