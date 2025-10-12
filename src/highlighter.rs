@@ -65,11 +65,8 @@ impl Highlighter {
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(&self.query, tree.root_node(), code.as_bytes());
 
-        while let Some(mat) = {
-            matches.advance();
-            matches.get()
-        } {
-            for cap in mat.captures {
+        while let Some(mat) = matches.next() {
+            for cap in mat.captures.iter() {
                 let node = cap.node;
                 let start = node.start_byte();
                 let end = node.end_byte();

@@ -108,8 +108,7 @@ impl Logger {
     /// # Panics
     /// This function might panic if it fails to get a lock on the file mutex
     pub fn log(&self, message: &str) {
-        let mut file = self.file.lock().unwrap();
-        writeln!(file, "{message}").expect("write to file works");
+        self.log_with_level(LogLevel::Info, message);
     }
 
     /// Log a message with a specified log level

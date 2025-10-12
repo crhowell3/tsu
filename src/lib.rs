@@ -44,3 +44,39 @@ macro_rules! debug {
         }
     };
 }
+
+#[macro_export]
+macro_rules! info {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.info(&log_message);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.warn(&log_message);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.error(&log_message);
+            }
+        }
+    };
+}

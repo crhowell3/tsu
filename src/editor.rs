@@ -13,21 +13,19 @@ use serde::{Deserialize, Serialize};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    LOGGER,
     action::Action,
-    debug,
-    editor::render_buffer::RenderBuffer,
-    unicode::{byte_to_char, char_to_byte, next_grapheme_boundary, prev_grapheme_boundary},
-    window_manager::WindowManager,
-};
-use crate::{
     buffer::Buffer,
+    color::Color,
     command,
     config::{Config, KeyAction},
+    debug,
+    editor::render_buffer::RenderBuffer,
     highlighter::Highlighter,
     log,
     theme::{Style, Theme},
     unicode,
+    unicode::{byte_to_char, char_to_byte, next_grapheme_boundary, prev_grapheme_boundary},
+    window_manager::WindowManager,
 };
 
 #[allow(unused)]
@@ -185,6 +183,7 @@ impl Editor {
         Self::with_size(size.0 as usize, size.1 as usize, config, theme, buffers)
     }
 
+    #[allow(unused)]
     fn sync_with_window(&mut self) {
         if let Some(window) = self.window_manager.active_window() {
             self.current_buffer_index = window.buffer_index;
@@ -305,46 +304,6 @@ impl Editor {
         self.highlighter.highlight(code)
     }
 
-    fn fill_line(&mut self, buffer: &mut RenderBuffer, x: usize, y: usize, style: &Style) {
-        let width = self.vwidth().saturating_sub(x);
-        let line_fill = " ".repeat(width);
-        buffer.set_text(x, y, &line_fill, style);
-    }
-
-    fn draw_line(&mut self, buffer: &mut RenderBuffer) {
-        let line = self.view_line(self.cursor_y).unwrap_or_default();
-        let style_info = self.highlight(&line).unwrap_or_default();
-        let default_style = self.theme.style;
-
-        let mut x = self.vx;
-        let mut iter = line.chars().enumerate().peekable();
-
-        if line.is_empty() {
-            self.fill_line(buffer, x, self.cursor_y, &default_style);
-            return;
-        }
-
-        while let Some((pos, c)) = iter.next() {
-            if c == '\n' || iter.peek().is_none() {
-                if c != '\n' {
-                    buffer.set_char(x, self.cursor_y, c, &default_style, &self.theme);
-                    x += 1;
-                }
-                self.fill_line(buffer, x, self.cursor_y, &default_style);
-                break;
-            }
-
-            if x < self.vwidth() {
-                if let Some(style) = determine_style_for_position(&style_info, pos) {
-                    buffer.set_char(x, self.cursor_y, c, &style, &self.theme);
-                } else {
-                    buffer.set_char(x, self.cursor_y, c, &default_style, &self.theme);
-                }
-            }
-            x += 1;
-        }
-    }
-
     #[allow(dead_code)]
     fn is_normal(&self) -> bool {
         matches!(self.mode, Mode::Normal)
@@ -391,8 +350,11 @@ impl Editor {
             .execute(terminal::EnterAlternateScreen)?
             .execute(terminal::Clear(terminal::ClearType::All))?;
 
-        let mut buffer =
-            RenderBuffer::new(self.size.0 as usize, self.size.1 as usize, Style::default());
+        let mut buffer = RenderBuffer::new(
+            self.size.0 as usize,
+            self.size.1 as usize,
+            &Style::default(),
+        );
 
         self.render(&mut buffer)?;
 
@@ -419,7 +381,7 @@ impl Editor {
                                 buffer = RenderBuffer::new(
                                     self.size.0 as usize,
                                     self.size.1 as usize,
-                                    Style::default(),
+                                    &Style::default(),
                                 );
 
                                 self.render(&mut buffer)?;
@@ -430,7 +392,6 @@ impl Editor {
                                 && self.handle_key_action(&ev, &action, &mut buffer).await? {
                                     break;
                                 }
-
                             self.render(&mut buffer)?;
                         },
                         Some(Err(error)) => {
@@ -499,7 +460,7 @@ impl Editor {
 
         Ok(match self.mode {
             Mode::Normal => self.handle_normal_event(ev),
-            Mode::Insert => self.handle_insert_event(ev),
+            Mode::Insert => self.handle_insert_event(ev)?,
             Mode::Command => self.handle_command_event(ev),
             Mode::Visual => self.handle_visual_event(ev),
             Mode::Replace => self.handle_replace_event(ev),
@@ -560,18 +521,18 @@ impl Editor {
         self.event_to_key_action(&normal, ev)
     }
 
-    fn handle_insert_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
+    fn handle_insert_event(&mut self, ev: &event::Event) -> anyhow::Result<Option<KeyAction>> {
         let insert = self.config.keys.insert.clone();
         if let Some(key_action) = self.event_to_key_action(&insert, ev) {
-            return Some(key_action);
+            return Ok(Some(key_action));
         }
 
         match ev {
             Event::Key(event) => match event.code {
-                KeyCode::Char(c) => KeyAction::Single(Action::InsertCharAtCursor(c)).into(),
-                _ => None,
+                KeyCode::Char(c) => Ok(KeyAction::Single(Action::InsertCharAtCursor(c)).into()),
+                _ => Ok(None),
             },
-            _ => None,
+            _ => Ok(None),
         }
     }
 
@@ -659,12 +620,21 @@ impl Editor {
         self.current_buffer().get(self.buffer_line())
     }
 
-    #[allow(clippy::too_many_lines)]
-    #[async_recursion::async_recursion]
     async fn execute(
         &mut self,
         action: &Action,
         buffer: &mut RenderBuffer,
+    ) -> anyhow::Result<bool> {
+        self.execute_with_tracking(action, buffer, true).await
+    }
+
+    #[allow(clippy::too_many_lines)]
+    #[async_recursion::async_recursion]
+    async fn execute_with_tracking(
+        &mut self,
+        action: &Action,
+        buffer: &mut RenderBuffer,
+        _tracking: bool,
     ) -> anyhow::Result<bool> {
         self.last_error = None;
 
@@ -731,13 +701,11 @@ impl Editor {
                         self.cursor_y = view_center;
                     }
                 }
-                self.render(buffer)?;
             }
             Action::MoveUp => {
                 if self.cursor_y == 0 {
                     if self.vtop > 0 {
                         self.vtop -= 1;
-                        self.render(buffer)?;
                     }
                 } else {
                     self.cursor_y = self.cursor_y.saturating_sub(1);
@@ -750,7 +718,6 @@ impl Editor {
                     if self.cursor_y >= self.vheight() {
                         self.vtop += 1;
                         self.cursor_y -= 1;
-                        self.render(buffer)?;
                     }
                 } else {
                     self.draw_cursor()?;
@@ -808,12 +775,10 @@ impl Editor {
             Action::MoveToTopOfBuffer => {
                 self.vtop = 0;
                 self.cursor_y = 0;
-                self.render(buffer)?;
             }
             Action::MoveToBottomOfBuffer => {
                 self.vtop = self.current_buffer().len() - self.vheight();
                 self.cursor_y = self.vheight() - 1;
-                self.render(buffer)?;
             }
             Action::MoveToLineStart => {
                 self.cursor_x = 0;
@@ -835,7 +800,6 @@ impl Editor {
                         let new_vtop = self.vtop + distance_to_center;
                         self.vtop = new_vtop;
                         self.cursor_y = view_center;
-                        self.render(buffer)?;
                     }
                 } else if distance_to_center < 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
@@ -844,7 +808,6 @@ impl Editor {
                     if self.current_buffer().len() > distance_to_go && new_vtop != self.vtop {
                         self.vtop = new_vtop;
                         self.cursor_y = view_center;
-                        self.render(buffer)?;
                     }
                 }
             }
@@ -853,7 +816,6 @@ impl Editor {
                 if line > self.vtop + self.vheight() {
                     self.vtop = line - self.vheight();
                     self.cursor_y = self.vheight() - 1;
-                    self.render(buffer)?;
                 }
             }
             Action::MoveViewDownOneLine => {
@@ -865,7 +827,6 @@ impl Editor {
                         self.cursor_y = 5;
                     }
                 }
-                self.render(buffer)?;
             }
             Action::MoveViewUpOneLine => {
                 if self.vtop > 0 {
@@ -876,18 +837,15 @@ impl Editor {
                         self.cursor_y = self.vheight() - 7;
                     }
                 }
-                self.render(buffer)?;
             }
             Action::PageUp => {
                 if self.vtop > 0 {
                     self.vtop = self.vtop.saturating_sub(self.vheight());
-                    self.render(buffer)?;
                 }
             }
             Action::PageDown => {
                 if self.current_buffer().len() > (self.vtop + self.vheight()) {
                     self.vtop += self.vheight();
-                    self.render(buffer)?;
                 }
             }
             Action::EnterMode(new_mode) => {
@@ -904,7 +862,6 @@ impl Editor {
                     self.undoable_actions.push(Action::UndoMultiple(actions));
                 }
 
-                let _old_mode = self.mode;
                 self.mode = *new_mode;
 
                 self.draw_status_line(buffer);
@@ -915,25 +872,34 @@ impl Editor {
                 let line = self.buffer_line();
                 let cursor_x = self.cursor_x;
 
+                crate::log!(
+                    "InsertCharAtCursor - char: '{}' (U+{:04x}), cursor_x: {}, line: {}",
+                    c,
+                    *c as u32,
+                    cursor_x,
+                    line
+                );
+
+                if let Some(line_content) = self.current_buffer().get(line) {
+                    crate::log!("Line content before insert: {:?}", line_content);
+                    crate::log!("Line char count: {}", line_content.chars().count());
+                }
+
                 self.current_buffer_mut().insert(cursor_x, line, *c);
                 self.cursor_x += 1;
-                self.draw_line(buffer);
             }
             Action::RemoveCharAt(x, y) => {
                 self.current_buffer_mut().remove(*x, *y);
-                self.draw_line(buffer);
             }
             Action::DeleteCharAtCursor => {
                 let cursor_x = self.cursor_x;
                 let line = self.buffer_line();
 
                 self.current_buffer_mut().remove(cursor_x, line);
-                self.draw_line(buffer);
             }
             Action::ReplaceLineAt(y, contents) => {
                 self.current_buffer_mut()
                     .replace_line(*y, contents.to_string());
-                self.draw_line(buffer);
             }
             Action::InsertNewLine => {
                 self.insert_undo_actions.extend(vec![
@@ -969,7 +935,6 @@ impl Editor {
                 let line = self.buffer_line();
 
                 self.current_buffer_mut().insert_line(line, new_line);
-                self.render(buffer)?;
             }
             Action::InsertLineAbove => {
                 self.undoable_actions
@@ -989,7 +954,6 @@ impl Editor {
                 self.current_buffer_mut()
                     .insert_line(line, " ".repeat(leading_spaces));
                 self.cursor_x = leading_spaces;
-                self.render(buffer)?;
             }
             Action::InsertLineBelow => {
                 self.undoable_actions
@@ -1007,8 +971,6 @@ impl Editor {
                     self.vtop += 1;
                     self.cursor_y -= 1;
                 }
-
-                self.render(buffer)?;
             }
             Action::InsertLineAt(line, contents) => {
                 self.undoable_actions
@@ -1016,7 +978,6 @@ impl Editor {
                 if let Some(contents) = contents {
                     self.current_buffer_mut()
                         .insert_line(*line, contents.to_string());
-                    self.render(buffer)?;
                 }
             }
             Action::DeleteCurrentLine => {
@@ -1026,7 +987,6 @@ impl Editor {
                 self.current_buffer_mut().remove_line(line);
                 self.undoable_actions
                     .push(Action::InsertLineAt(line, contents));
-                self.render(buffer)?;
             }
             Action::DeletePreviousChar => {
                 if self.cursor_x > 0
@@ -1047,8 +1007,6 @@ impl Editor {
                         for _ in 0..chars_to_remove {
                             self.current_buffer_mut().remove(pos_x, line_num);
                         }
-
-                        self.draw_line(buffer);
                     }
                 }
             }
@@ -1057,7 +1015,6 @@ impl Editor {
             }
             Action::DeleteLineAt(y) => {
                 self.current_buffer_mut().remove_line(*y);
-                self.render(buffer)?;
             }
             Action::Command(cmd) => {
                 for action in self.handle_command(cmd) {
@@ -1565,8 +1522,37 @@ fn determine_style_for_position(style_info: &[StyleInfo], pos: usize) -> Option<
         .iter()
         .find(|style_info| style_info.contains(pos))
     {
-        return Some(s.style);
+        return Some(s.style.clone());
     }
 
     None
+}
+
+#[allow(unused)]
+fn adjust_color_brightness(color: Option<Color>, percentage: i32) -> Option<Color> {
+    let color = color?;
+
+    if let Color::Rgb { r, g, b } = color {
+        let adjust = |component: u8| -> u8 {
+            let delta = (255.0 * (percentage as f32 / 100.0)) as i32;
+            let new_component = component as i32 + delta;
+            if new_component > 255 {
+                255
+            } else if new_component < 0 {
+                0
+            } else {
+                new_component as u8
+            }
+        };
+
+        let r = adjust(r);
+        let g = adjust(g);
+        let b = adjust(b);
+
+        let new_color = Color::Rgb { r, g, b };
+
+        Some(new_color)
+    } else {
+        Some(color)
+    }
 }

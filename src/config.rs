@@ -42,6 +42,8 @@ pub struct Config {
     pub log_file: Option<String>,
     /// Optionally increase the amount of lines scrolled per mouse scroll
     pub mouse_scroll_lines: Option<usize>,
+    #[serde(default = "default_false")]
+    pub window_borders_ascii: bool,
 }
 
 impl Config {
@@ -62,6 +64,10 @@ impl Config {
     }
 }
 
+pub fn default_false() -> bool {
+    false
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -69,7 +75,7 @@ mod test {
 
     #[test]
     fn test_parse_config() {
-        let toml = fs::read_to_string("src/fixtures/config.toml").unwrap();
+        let toml = fs::read_to_string("default_config.toml").unwrap();
         let config: Config = toml::from_str(&toml).unwrap();
         println!("{config:#?}");
     }

@@ -1,10 +1,7 @@
 use crate::{
     color::{Color, blend_color},
-    log,
     theme::{Style, Theme},
 };
-
-use super::Point;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cell {
@@ -28,11 +25,11 @@ pub struct RenderBuffer {
 }
 
 impl RenderBuffer {
-    pub fn new(width: usize, height: usize, default_style: Style) -> Self {
+    pub fn new(width: usize, height: usize, default_style: &Style) -> Self {
         let cells = vec![
             Cell {
                 c: ' ',
-                style: default_style,
+                style: default_style.clone(),
             };
             width * height
         ];
@@ -55,10 +52,16 @@ impl RenderBuffer {
 
         for line in contents {
             for c in line.chars() {
-                cells.push(Cell { c, style });
+                cells.push(Cell {
+                    c,
+                    style: style.clone(),
+                });
             }
             for _ in 0..width.saturating_sub(line.len()) {
-                cells.push(Cell { c: ' ', style });
+                cells.push(Cell {
+                    c: ' ',
+                    style: style.clone(),
+                });
             }
         }
 
@@ -119,7 +122,10 @@ impl RenderBuffer {
             if pos + i >= self.cells.len() {
                 break;
             }
-            self.cells[pos + i] = Cell { c, style: *style }
+            self.cells[pos + i] = Cell {
+                c,
+                style: style.clone(),
+            }
         }
     }
 

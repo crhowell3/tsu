@@ -5,6 +5,10 @@ log_file = "/tmp/tsu.log"
 [keys.insert]
 Enter = "InsertNewLine"
 Backspace = "DeletePreviousChar"
+"Up" = "MoveUp"
+"Down" = "MoveDown"
+"Left" = "MoveLeft"
+"Right" = "MoveRight"
 Esc = { EnterMode = "Normal" }
 
 [keys.normal]

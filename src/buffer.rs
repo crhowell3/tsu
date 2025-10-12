@@ -217,7 +217,14 @@ impl Buffer {
         let char_idx = self.position_to_char_idx(x, y);
         let total_chars = self.content.len_chars();
 
+        crate::debug!(
+            "Buffer::insert - x: {x}, y: {y}, char: '{c}', char_idx: {char_idx}, total_chars: {total_chars}"
+        );
+
         if char_idx > total_chars {
+            crate::error!(
+                "char_idx {char_idx} exceeds total_chars {total_chars}! Clamping to end."
+            );
             self.content.insert_char(total_chars, c);
         } else {
             self.content.insert_char(char_idx, c);

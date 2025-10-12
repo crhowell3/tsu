@@ -68,7 +68,12 @@ pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
     let g = u8::from_str_radix(&hex[2..4], 16)?;
     let b = u8::from_str_radix(&hex[4..6], 16)?;
 
-    Ok(Color::Rgb { r, g, b })
+    if len == 8 {
+        let a = u8::from_str_radix(&hex[6..8], 16)?;
+        Ok(Color::Rgba { r, g, b, a })
+    } else {
+        Ok(Color::Rgb { r, g, b })
+    }
 }
 
 pub fn blend_color(foreground: Color, background: Color) -> Color {

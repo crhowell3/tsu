@@ -7,9 +7,9 @@ use crossterm::{
 };
 
 use crate::{
-    color::Color,
+    color::{Color, blend_color},
     debug,
-    editor::{Mode, determine_style_for_position, render_buffer::Change},
+    editor::{Mode, Point, determine_style_for_position, render_buffer::Change},
     theme::Style,
     unicode::char_display_width,
 };
@@ -22,11 +22,16 @@ impl Editor {
         let current_buffer = buffer.clone();
 
         let window_count = self.window_manager.windows().len();
+        crate::log!("Starting render of {window_count} window(s)");
         for window_id in 0..window_count {
             self.render_window(buffer, window_id)?;
         }
 
+        self.render_window_separators(buffer)?;
+
         self.render_decorations(buffer)?;
+
+        self.update_and_render_overlays(buffer)?;
 
         let diff = buffer.diff(&current_buffer);
         self.render_diff(diff)?;
@@ -82,37 +87,298 @@ impl Editor {
         Ok(())
     }
 
+    fn render_window_separators(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
+        let separator_style = Style {
+            foreground: Some(Color::Rgb {
+                r: 100,
+                g: 100,
+                b: 100,
+            }),
+            background: None,
+            bold: false,
+            italic: false,
+        };
+
+        let (term_width, term_height) = (self.size.0 as usize, self.size.1 as usize);
+
+        let windows = self.window_manager.windows();
+        if windows.len() <= 1 {
+            return Ok(());
+        }
+
+        let use_ascii = self.config.window_borders_ascii;
+
+        let mut vertical_separators: Vec<(usize, usize, usize)> = Vec::new();
+        let mut horizontal_separators: Vec<(usize, usize, usize)> = Vec::new();
+
+        let mut vertical_x_positions: std::collections::HashSet<usize> =
+            std::collections::HashSet::new();
+
+        for i in 0..windows.len() {
+            for j in 0..windows.len() {
+                if i == j {
+                    continue;
+                }
+
+                let window1 = windows[i];
+                let window2 = windows[j];
+
+                if window1.position.x + window1.size.0 + 1 == window2.position.x {
+                    let x = window1.position.x + window1.size.0;
+                    vertical_x_positions.insert(x);
+                }
+            }
+        }
+
+        // Now for each vertical separator position, find the full extent
+        for x in vertical_x_positions {
+            let mut min_y = term_height;
+            let mut max_y = 0;
+
+            // Find all windows that have this separator on their right edge
+            for window in &windows {
+                if window.position.x + window.size.0 == x {
+                    min_y = min_y.min(window.position.y);
+                    max_y = max_y.max(window.position.y + window.size.1);
+                }
+            }
+
+            if min_y < max_y {
+                vertical_separators.push((x, min_y, max_y));
+            }
+        }
+
+        let mut horizontal_y_positions: std::collections::HashSet<usize> =
+            std::collections::HashSet::new();
+
+        for i in 0..windows.len() {
+            for j in 0..windows.len() {
+                if i == j {
+                    continue;
+                }
+                let window1 = windows[i];
+                let window2 = windows[j];
+
+                if window1.position.y + window1.size.1 + 1 == window2.position.y {
+                    let y = window1.position.y + window1.size.1;
+                    horizontal_y_positions.insert(y);
+                }
+            }
+        }
+
+        for y in horizontal_y_positions {
+            let mut min_x = term_width;
+            let mut max_x = 0;
+
+            for window in &windows {
+                if window.position.y + window.size.1 == y {
+                    min_x = min_x.min(window.position.x);
+                    max_x = max_x.max(window.position.x + window.size.0);
+                }
+            }
+
+            if min_x < max_x {
+                horizontal_separators.push((y, min_x, max_x));
+            }
+        }
+
+        let mut temp_grid: std::collections::HashMap<(usize, usize), char> =
+            std::collections::HashMap::new();
+
+        for (x, y_start, y_end) in &vertical_separators {
+            for y in *y_start..*y_end {
+                temp_grid.insert((*x, y), if use_ascii { '|' } else { '│' });
+            }
+        }
+
+        for (y, x_start, x_end) in &horizontal_separators {
+            for x in *x_start..*x_end {
+                if let Some(existing) = temp_grid.get(&(x, *y)) {
+                    if *existing == '|' || *existing == '│' {
+                        temp_grid.insert((x, *y), if use_ascii { '+' } else { '┼' });
+                    }
+                } else {
+                    temp_grid.insert((x, *y), if use_ascii { '-' } else { '─' });
+                }
+            }
+        }
+
+        let mut intersections = Vec::new();
+        for ((x, y), ch) in &temp_grid {
+            if *ch == '┼' || *ch == '+' {
+                intersections.push((*x, *y, *ch));
+            }
+        }
+
+        let has_vertical_component = |c: char| -> bool {
+            matches!(
+                c,
+                '│' | '|' | '┼' | '+' | '├' | '┤' | '┬' | '┴' | '┌' | '┐' | '└' | '┘'
+            )
+        };
+
+        let has_horizontal_component = |c: char| -> bool {
+            matches!(
+                c,
+                '─' | '-' | '┼' | '+' | '┬' | '┴' | '├' | '┤' | '┌' | '┐' | '└' | '┘'
+            )
+        };
+
+        let mut final_grid: std::collections::HashMap<(usize, usize), char> =
+            std::collections::HashMap::new();
+
+        for (x, y) in temp_grid.keys() {
+            let connects_up = if *y > 0 {
+                temp_grid
+                    .get(&(*x, y.saturating_sub(1)))
+                    .map(|&c| has_vertical_component(c))
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            let connects_down = if *y < term_height - 1 {
+                temp_grid
+                    .get(&(*x, y + 1))
+                    .map(|&c| has_vertical_component(c))
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            let connects_left = if *x > 0 {
+                temp_grid
+                    .get(&(x.saturating_sub(1), *y))
+                    .map(|&c| has_horizontal_component(c))
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            let connects_right = if *x < term_width - 1 {
+                temp_grid
+                    .get(&(x + 1, *y))
+                    .map(|&c| has_horizontal_component(c))
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            let junction_char = if use_ascii {
+                if connects_up || connects_down || connects_left || connects_right {
+                    if (connects_up || connects_down) && (connects_left || connects_right) {
+                        '+'
+                    } else if connects_up || connects_down {
+                        '|'
+                    } else {
+                        '-'
+                    }
+                } else {
+                    '+'
+                }
+            } else {
+                match (connects_up, connects_down, connects_left, connects_right) {
+                    (true, true, true, true) => '┼',
+                    (true, true, true, false) => '┤',
+                    (true, true, false, true) => '├',
+                    (true, false, true, true) => '┴',
+                    (false, true, true, true) => '┬',
+                    (true, false, false, true) => '└',
+                    (true, false, true, false) => '┘',
+                    (false, true, false, true) => '┌',
+                    (false, true, true, false) => '┐',
+                    (true, true, false, false) => '│',
+                    (false, false, true, true) => '─',
+                    (true, false, false, false) => '│',
+                    (false, true, false, false) => '│',
+                    (false, false, true, false) => '─',
+                    (false, false, false, true) => '─',
+                    (false, false, false, false) => '·',
+                }
+            };
+
+            final_grid.insert((*x, *y), junction_char);
+        }
+
+        for ((x, y), char) in final_grid {
+            buffer.set_char(x, y, char, &separator_style, &self.theme);
+        }
+
+        Ok(())
+    }
+
     fn render_decorations(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
         self.draw_status_line(buffer);
         self.draw_command_line(buffer);
         Ok(())
     }
 
-    pub fn render_diff(&mut self, change_set: Vec<Change>) -> anyhow::Result<()> {
-        for change in change_set {
-            let x = u16::try_from(change.x).expect("value too large to fit in u16");
-            let y = u16::try_from(change.y).expect("value too large to fit in u16");
+    pub fn render_diff(&mut self, change_set: Vec<Change<'_>>) -> anyhow::Result<()> {
+        self.stdout.queue(cursor::Hide)?;
+
+        let mut sorted_changes = change_set;
+
+        sorted_changes.sort_by_key(|change| (change.y, change.x));
+
+        let mut skip_next = false;
+        for change in sorted_changes.iter() {
+            if skip_next {
+                skip_next = false;
+                continue;
+            }
+
+            let x = change.x;
+            let y = change.y;
             let cell = change.cell;
 
-            self.stdout.queue(cursor::MoveTo(x, y))?;
+            self.stdout.queue(cursor::MoveTo(x as u16, y as u16))?;
+
             if let Some(background) = cell.style.background {
+                let background = blend_color(
+                    background,
+                    self.theme
+                        .style
+                        .background
+                        .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
+                );
                 self.stdout
                     .queue(style::SetBackgroundColor(background.into()))?;
+            } else {
+                self.stdout.queue(style::SetBackgroundColor(
+                    self.theme.style.background.unwrap().into(),
+                ))?;
             }
+
             if let Some(foreground) = cell.style.foreground {
+                let foreground = blend_color(
+                    foreground,
+                    self.theme
+                        .style
+                        .background
+                        .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
+                );
                 self.stdout
                     .queue(style::SetForegroundColor(foreground.into()))?;
+            } else {
+                self.stdout.queue(style::SetForegroundColor(
+                    self.theme.style.foreground.unwrap().into(),
+                ))?;
+            }
+            if cell.style.italic {
+                self.stdout
+                    .queue(style::SetAttribute(style::Attribute::Italic))?;
+            } else {
+                self.stdout
+                    .queue(style::SetAttribute(style::Attribute::NoItalic))?;
             }
             self.stdout.queue(style::Print(cell.c))?;
         }
 
+        self.stdout.queue(cursor::Show)?;
+
         self.set_cursor_style()?;
-        self.stdout
-            .queue(cursor::MoveTo(
-                u16::try_from(self.vx + self.cursor_x).expect("value too large to fit in u16"),
-                u16::try_from(self.cursor_y).expect("value too large to fit in u16"),
-            ))?
-            .flush()?;
+        self.draw_cursor()?;
+        self.stdout.flush()?;
 
         Ok(())
     }
@@ -143,6 +409,14 @@ impl Editor {
             buffer.set_text(terminal_x, terminal_y, &text, &gutter_style);
         }
 
+        Ok(())
+    }
+
+    fn update_and_render_overlays(&mut self, _buffer: &mut RenderBuffer) -> anyhow::Result<()> {
+        let _cursor_position = Some(Point::new(
+            self.cursor_x + self.gutter_width() + 1,
+            self.cursor_y,
+        ));
         Ok(())
     }
 
@@ -203,7 +477,7 @@ impl Editor {
             }
 
             let style = determine_style_for_position(&style_info, position)
-                .unwrap_or_else(|| self.theme.style.clone());
+                .unwrap_or(self.theme.style.clone());
 
             let terminal_x = self.window_to_terminal_x(window, x);
             let terminal_y = self.window_to_terminal_y(window, y);

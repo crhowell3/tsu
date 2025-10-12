@@ -48,7 +48,7 @@ impl Window {
         x >= self.position.x
             && x < self.position.x + self.size.0
             && y >= self.position.y
-            && y <= self.position.y + self.size.1
+            && y < self.position.y + self.size.1
     }
 
     pub fn terminal_to_local_transform(

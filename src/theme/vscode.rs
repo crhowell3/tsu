@@ -2,15 +2,12 @@ use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 
-use crate::{
-    color::{Color, parse_rgb},
-    theme::StatusLineStyle,
-};
+use crate::color::parse_rgb;
 
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::{Style, Theme, TokenStyle};
+use super::{StatusLineStyle, Style, Theme, TokenStyle};
 
 static SYNTAX_HIGHLIGHTING_MAP: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     let mut m = HashMap::new();
@@ -193,27 +190,39 @@ pub fn parse_vscode_theme(file: &str) -> anyhow::Result<Theme> {
 
     let status_line_style = StatusLineStyle {
         outer_style: Style {
-            foreground: Some(Color::Rgb { r: 0, g: 0, b: 0 }),
-            background: Some(Color::Rgb {
-                r: 187,
-                g: 154,
-                b: 247,
-            }),
+            foreground: vscode_theme
+                .colors
+                .iter()
+                .find(|(c, _)| **c == "statusBar.background")
+                .map(|(_, hex)| {
+                    parse_rgb(hex.as_str().expect("colors are formatted as a hex string")).unwrap()
+                }),
+            background: vscode_theme
+                .colors
+                .iter()
+                .find(|(c, _)| **c == "editorBracketHighlight.foreground4")
+                .map(|(_, hex)| {
+                    parse_rgb(hex.as_str().expect("colors are formatted as a hex string")).unwrap()
+                }),
             bold: true,
             ..Default::default()
         },
         outer_chars: [' ', '', '', ' '],
         inner_style: Style {
-            foreground: Some(Color::Rgb {
-                r: 255,
-                g: 255,
-                b: 255,
-            }),
-            background: Some(Color::Rgb {
-                r: 65,
-                g: 72,
-                b: 104,
-            }),
+            foreground: vscode_theme
+                .colors
+                .iter()
+                .find(|(c, _)| **c == "foreground")
+                .map(|(_, hex)| {
+                    parse_rgb(hex.as_str().expect("colors are formatted as a hex string")).unwrap()
+                }),
+            background: vscode_theme
+                .colors
+                .iter()
+                .find(|(c, _)| **c == "editorSuggestWidget.border")
+                .map(|(_, hex)| {
+                    parse_rgb(hex.as_str().expect("colors are formatted as a hex string")).unwrap()
+                }),
             ..Default::default()
         },
     };
@@ -276,7 +285,7 @@ mod test {
 
     #[test]
     fn test_parse_vscode() {
-        let theme = parse_vscode_theme("./src/fixtures/tokyo-night-storm.json").unwrap();
+        let theme = parse_vscode_theme("./themes/frappe.json").unwrap();
         println!("{:?}", theme);
     }
 }
