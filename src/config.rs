@@ -65,6 +65,10 @@ impl Config {
 }
 
 #[must_use]
+/// Serde function for setting the default value of a Boolean to `false`
+///
+/// # Returns
+/// - `false` always
 pub fn default_false() -> bool {
     false
 }

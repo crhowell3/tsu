@@ -17,12 +17,23 @@ pub enum Color {
 }
 
 impl Default for Color {
+    /// Generates a `Color` with default values
+    ///
+    /// # Returns
+    /// - A default `Color`, which in this case is #000000, or black
     fn default() -> Self {
         Color::Rgb { r: 0, g: 0, b: 0 }
     }
 }
 
 impl From<Color> for crossterm::style::Color {
+    /// Provides the logic for converting our custom `Color` to a `crossterm::style::Color`
+    ///
+    /// # Arguments
+    /// - `color`: An instance of our custom `Color` struct
+    ///
+    /// # Returns
+    /// - An instance of `crossterm::style::Color` derived from the custom `Color`
     fn from(color: Color) -> Self {
         match color {
             Color::Rgb { r, g, b } | Color::Rgba { r, g, b, a: _ } => {
@@ -33,6 +44,13 @@ impl From<Color> for crossterm::style::Color {
 }
 
 impl fmt::Display for Color {
+    /// Provides formatting for printing the contents of `Color` to the console
+    ///
+    /// # Arguments
+    /// - `f`: Mutable reference to a `std::fmt::Formatter`
+    ///
+    /// # Returns
+    /// - The result of the formatted string
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Color::Rgb { r, g, b } => write!(f, "#{r:02x}{g:02x}{b:02x}"),
@@ -86,6 +104,14 @@ pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
 }
 
 #[must_use]
+/// Takes a foreground and background color and executes a blending algorithm for color smoothing
+///
+/// # Arguments
+/// - `foreground`: The `Color` of the text
+/// - `background`: The `Color` of the terminal background
+///
+/// # Returns
+/// - The calculated blended color
 pub fn blend_color(foreground: Color, background: Color) -> Color {
     match (foreground, background) {
         (
