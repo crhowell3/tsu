@@ -867,8 +867,6 @@ impl Editor {
                 }
 
                 self.mode = *new_mode;
-
-                self.draw_status_line(buffer);
             }
             Action::InsertCharAtCursor(c) => {
                 self.insert_undo_actions
