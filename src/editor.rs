@@ -1516,6 +1516,14 @@ impl Editor {
     }
 }
 
+/// Determines the style of a given position based on computed `StyleInfo` data
+///
+/// # Arguments
+/// - `style_info`: A slice of a `Vec<StyleInfo>` to use to lookup the `Style` for a given position
+/// - `pos`: The position in question
+///
+/// # Returns
+/// - A `Style` if one was able to be determined, `None` if otherwise
 fn determine_style_for_position(style_info: &[StyleInfo], pos: usize) -> Option<Style> {
     if let Some(s) = style_info
         .iter()
@@ -1528,6 +1536,14 @@ fn determine_style_for_position(style_info: &[StyleInfo], pos: usize) -> Option<
 }
 
 #[allow(unused)]
+/// Adjusts the opacity of a color given some percentage
+///
+/// # Arguments
+/// - `color`: The color to adjust
+/// - `percentage`: The desired brightness adjustment percentage of the color
+///
+/// # Returns
+/// - An adjusted color based on the given percentage
 fn adjust_color_brightness(color: Option<Color>, percentage: i32) -> Option<Color> {
     let color = color?;
 

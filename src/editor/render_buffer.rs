@@ -26,6 +26,15 @@ pub struct RenderBuffer {
 
 impl RenderBuffer {
     #[must_use]
+    /// Creates a new `RenderBuffer` with a default style
+    ///
+    /// # Arguments
+    /// - `width`: The desired width of the buffer measured in "cells"
+    /// - `height`: The desired height of the buffer measured in "cells"
+    /// - `default_style`: Some default style for formatting the empty cells
+    ///
+    /// # Returns
+    /// - A newly constructed `RenderBuffer` with a default style and no content
     pub fn new(width: usize, height: usize, default_style: &Style) -> Self {
         let cells = vec![
             Cell {
@@ -43,6 +52,16 @@ impl RenderBuffer {
     }
 
     #[must_use]
+    /// Creates a new `RenderBuffer` with text
+    ///
+    /// # Arguments
+    /// - `width`: The desired width of the buffer measured in "cells"
+    /// - `height`: The desired height of the buffer measured in "cells"
+    /// - `style`: Styling to apply to the cells based on the provided content
+    /// - `contents`: A vector of strings representing the buffer's text
+    ///
+    /// # Returns
+    /// - A constructed `RenderBuffer` with styling and textual content
     pub fn new_with_contents(
         width: usize,
         height: usize,
@@ -73,6 +92,7 @@ impl RenderBuffer {
         }
     }
 
+    /// Clears the buffer by replacing all characters within the cells with whitespace
     pub fn clear(&mut self) {
         self.cells = vec![
             Cell {
@@ -83,6 +103,14 @@ impl RenderBuffer {
         ];
     }
 
+    /// Add a character to a buffer cell with appropriate styling and theme
+    ///
+    /// # Arguments
+    /// - `x`: The x coordinate of the cell
+    /// - `y`: The y coordinate of the cell
+    /// - `c`: The character to emplace
+    /// - `style`: The styling of the character and its encapsulating cell
+    /// - `theme`: The theme to use for styling
     pub fn set_char(&mut self, x: usize, y: usize, c: char, style: &Style, theme: &Theme) {
         if x > self.width || y > self.height {
             return;
@@ -114,6 +142,13 @@ impl RenderBuffer {
         };
     }
 
+    /// Adds a string of text to the buffer with appropriate styling
+    ///
+    /// # Arguments
+    /// - `x`: The x coordinate representing the start of the text's destination within the buffer
+    /// - `y`: The y coordinate representing the start of the text's destination within the buffer
+    /// - `text`: The text to emplace
+    /// - `style`: The styling to apply to the text on a cell-wise basis
     pub fn set_text(&mut self, x: usize, y: usize, text: &str, style: &Style) {
         let pos = (y * self.width) + x;
         for (i, c) in text.chars().enumerate() {
@@ -131,6 +166,13 @@ impl RenderBuffer {
     }
 
     #[must_use]
+    /// Computes the differences between two `RenderBuffer`s
+    ///
+    /// # Arguments
+    /// - `other`: The buffer being compared to the current buffer
+    ///
+    /// # Returns
+    /// - A vector of `Change`s which contains information about which positions and cells differ
     pub fn diff(&self, other: &RenderBuffer) -> Vec<Change<'_>> {
         let mut changes = vec![];
         for (pos, cell) in self.cells.iter().enumerate() {

@@ -60,6 +60,16 @@ pub fn byte_to_char(line: &str, byte_offset: usize) -> usize {
 }
 
 #[must_use]
+/// Query the byte boundary of the next grapheme in a given string
+///
+/// # Arguments
+/// - `s`: A string containing the grapheme in question
+/// - `byte_offset`: The byte offset of the grapheme preceding the grapheme of interest
+///
+/// # Returns
+/// - The byte boundary of the grapheme succeeding the grapheme corresponding to the byte offset
+///   provided if the byte offset is within the bounds of the string, i.e., less than the length of
+///   the string
 pub fn next_grapheme_boundary(s: &str, byte_offset: usize) -> Option<usize> {
     let graphemes: Vec<(usize, &str)> = s.grapheme_indices(true).collect();
 

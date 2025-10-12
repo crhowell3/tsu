@@ -19,7 +19,9 @@ pub struct Buffer {
     content: Rope,
     /// State flag for keeping track of unsaved (dirty) changes
     pub dirty: bool,
+    /// Cursor position within the buffer
     pub position: (usize, usize),
+    /// The y coordinate of the top of the view
     pub vtop: usize,
 }
 
@@ -164,11 +166,19 @@ impl Buffer {
     }
 
     #[must_use]
+    /// Retrieves the name of the buffer which corresponds to the file path it was created from
+    ///
+    /// # Returns
+    /// - The name of the buffer; if the buffer was not created from a file, returns "[No name]"
     pub fn name(&self) -> &str {
         self.file.as_deref().unwrap_or("[No name]")
     }
 
     #[must_use]
+    /// Check if the buffer is dirty, i.e., has unsaved changes'
+    ///
+    /// # Returns
+    /// - `true` if the buffer is dirty, `false` otherwise
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
@@ -350,6 +360,14 @@ impl Buffer {
     }
 
     #[must_use]
+    /// Converts a column index to a character index
+    ///
+    /// # Arguments
+    /// - `column`: The column index which is to be converted to a character index
+    /// - `y`: The y coordinate which corresponds to the line number
+    ///
+    /// # Returns
+    /// - The character index as calculated from the column index and the specified line number
     pub fn column_to_char_index(&self, column: usize, y: usize) -> usize {
         if let Some(line) = self.get(y) {
             let line = line.trim_end_matches('\n');

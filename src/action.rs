@@ -39,13 +39,17 @@ pub enum Action {
     MoveToLineEnd,
     /// Move the cursor to the beginning of the current line
     MoveToLineStart,
-    /// TODO
+    /// Move the current line to the center of the view
     MoveLineToViewCenter,
-    /// TODO
+    /// Move the current line to the bottom of the view
     MoveLineToViewBottom,
+    /// Move the viewport down one line
     MoveViewDownOneLine,
+    /// Move the viewport up one line
     MoveViewUpOneLine,
+    /// Move the cursor to the bottom of the buffer
     MoveToBottomOfBuffer,
+    /// Move the cursor to the top of the buffer
     MoveToTopOfBuffer,
 
     /// Move the view up one "page"
@@ -56,19 +60,29 @@ pub enum Action {
     /// Run a command given a string input in command mode
     Command(String),
 
-    // Text editing
+    /// Insert a character at the current location of the cursor
     InsertCharAtCursor(char),
+    /// Remove a character at the specified position
     RemoveCharAt(usize, usize),
+    /// Insert a line above the cursor
     InsertLineAbove,
+    /// Insert a line below the cursor
     InsertLineBelow,
+    /// Insert a line at the specified y coordinate
     InsertLineAt(usize, Option<String>),
+    /// Insert a new line character ('\n')
     InsertNewLine,
 
+    /// Replace the contents of the line at the specified y coordinate with another string
     ReplaceLineAt(usize, String),
 
+    /// Delete the character behind the cursor
     DeletePreviousChar,
+    /// Delete the character at the cursor
     DeleteCharAtCursor,
+    /// Delete the line where the cursor is currently located
     DeleteCurrentLine,
+    /// Delete the line at the specified y coordinate
     DeleteLineAt(usize),
 
     /// Go to the specified line provided in command mode
@@ -76,6 +90,6 @@ pub enum Action {
 
     /// Change to mode
     EnterMode(Mode),
-    /// TODO
+    /// Store the first key in a multi-character command sequence
     SetWaitingKey(Box<KeyAction>),
 }
