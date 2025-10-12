@@ -66,7 +66,7 @@ impl Highlighter {
         let mut matches = cursor.matches(&self.query, tree.root_node(), code.as_bytes());
 
         while let Some(mat) = matches.next() {
-            for cap in mat.captures.iter() {
+            for cap in mat.captures {
                 let node = cap.node;
                 let start = node.start_byte();
                 let end = node.end_byte();

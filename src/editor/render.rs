@@ -87,6 +87,7 @@ impl Editor {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn render_window_separators(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
         let separator_style = Style {
             foreground: Some(Color::Rgb {
@@ -231,8 +232,7 @@ impl Editor {
             let connects_up = if *y > 0 {
                 temp_grid
                     .get(&(*x, y.saturating_sub(1)))
-                    .map(|&c| has_vertical_component(c))
-                    .unwrap_or(false)
+                    .is_some_and(|&c| has_vertical_component(c))
             } else {
                 false
             };
@@ -240,8 +240,7 @@ impl Editor {
             let connects_down = if *y < term_height - 1 {
                 temp_grid
                     .get(&(*x, y + 1))
-                    .map(|&c| has_vertical_component(c))
-                    .unwrap_or(false)
+                    .is_some_and(|&c| has_vertical_component(c))
             } else {
                 false
             };
@@ -249,8 +248,7 @@ impl Editor {
             let connects_left = if *x > 0 {
                 temp_grid
                     .get(&(x.saturating_sub(1), *y))
-                    .map(|&c| has_horizontal_component(c))
-                    .unwrap_or(false)
+                    .is_some_and(|&c| has_horizontal_component(c))
             } else {
                 false
             };
@@ -258,8 +256,7 @@ impl Editor {
             let connects_right = if *x < term_width - 1 {
                 temp_grid
                     .get(&(x + 1, *y))
-                    .map(|&c| has_horizontal_component(c))
-                    .unwrap_or(false)
+                    .is_some_and(|&c| has_horizontal_component(c))
             } else {
                 false
             };
@@ -287,12 +284,8 @@ impl Editor {
                     (true, false, true, false) => '┘',
                     (false, true, false, true) => '┌',
                     (false, true, true, false) => '┐',
-                    (true, true, false, false) => '│',
-                    (false, false, true, true) => '─',
-                    (true, false, false, false) => '│',
-                    (false, true, false, false) => '│',
-                    (false, false, true, false) => '─',
-                    (false, false, false, true) => '─',
+                    (true | false, true, false, false) | (true, false, false, false) => '│',
+                    (false, false, true | false, true) | (false, false, true, false) => '─',
                     (false, false, false, false) => '·',
                 }
             };
@@ -321,7 +314,7 @@ impl Editor {
         sorted_changes.sort_by_key(|change| (change.y, change.x));
 
         let mut skip_next = false;
-        for change in sorted_changes.iter() {
+        for change in sorted_changes {
             if skip_next {
                 skip_next = false;
                 continue;
@@ -618,7 +611,7 @@ impl Editor {
         buffer.set_text(
             mode.len() + 2 + file_width as usize,
             y,
-            &format!("{}{}", position, window_indicator),
+            &format!("{position}{window_indicator}"),
             &self.theme.status_line_style.outer_style,
         );
     }

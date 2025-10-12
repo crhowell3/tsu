@@ -16,10 +16,12 @@ pub enum Split {
 }
 
 impl Split {
+    #[must_use]
     pub fn new_window(buffer_index: usize, position: Point, size: (usize, usize)) -> Self {
         Split::Window(Window::new(buffer_index, position, size))
     }
 
+    #[must_use]
     pub fn windows(&self) -> Vec<&Window> {
         match self {
             Split::Window(w) => vec![w],
@@ -88,6 +90,7 @@ pub struct WindowManager {
 }
 
 impl WindowManager {
+    #[must_use]
     pub fn new(buffer_index: usize, terminal_size: (usize, usize)) -> Self {
         let mut root = Split::new_window(
             buffer_index,
@@ -105,6 +108,7 @@ impl WindowManager {
         }
     }
 
+    #[must_use]
     pub fn active_window(&self) -> Option<&Window> {
         self.root.windows().get(self.active_window_id).copied()
     }
@@ -143,6 +147,7 @@ impl WindowManager {
         }
     }
 
+    #[must_use]
     pub fn windows(&self) -> Vec<&Window> {
         self.root.windows()
     }
@@ -158,6 +163,7 @@ impl WindowManager {
         );
     }
 
+    #[must_use]
     pub fn active_window_id(&self) -> usize {
         self.active_window_id
     }

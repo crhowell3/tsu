@@ -237,7 +237,7 @@ impl Buffer {
     /// # Arguments
     /// - `line`: The line index where the contents will be inserted
     /// - `content`: The string to insert at the specified row
-    pub fn insert_line(&mut self, line: usize, content: String) {
+    pub fn insert_line(&mut self, line: usize, content: &str) {
         let char_idx = if line >= self.content.len_lines() {
             self.content.len_chars()
         } else {
@@ -265,7 +265,7 @@ impl Buffer {
     /// # Arguments
     /// - `line`: The index of the line being replaced
     /// - `new_line`: The String to be written to the line index
-    pub fn replace_line(&mut self, line: usize, new_line: String) {
+    pub fn replace_line(&mut self, line: usize, new_line: &str) {
         if line >= self.len() {
             return;
         }
@@ -349,6 +349,7 @@ impl Buffer {
         line_start_char + x
     }
 
+    #[must_use]
     pub fn column_to_char_index(&self, column: usize, y: usize) -> usize {
         if let Some(line) = self.get(y) {
             let line = line.trim_end_matches('\n');

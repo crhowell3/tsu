@@ -44,7 +44,7 @@ impl fmt::Display for Color {
 /// Attempt to parse a hexadecimal string into a `Color`
 ///
 /// # Arguments
-/// - `s`: A hexadecimal string representation of a color, i.e., "#A3D1FD"
+/// - `s`: A hexadecimal string representation of a color, i.e., "#DEADBEEF"
 ///
 /// # Returns
 /// - If successfully parsed, a `Color::Rgb` or `Color::Rgba`
@@ -64,18 +64,28 @@ pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
         anyhow::bail!("Hex string must be in the format #RRGGBB or #RRGGBBAA instead of {s}");
     }
 
-    let r = u8::from_str_radix(&hex[0..2], 16)?;
-    let g = u8::from_str_radix(&hex[2..4], 16)?;
-    let b = u8::from_str_radix(&hex[4..6], 16)?;
+    let red = u8::from_str_radix(&hex[0..2], 16)?;
+    let green = u8::from_str_radix(&hex[2..4], 16)?;
+    let blue = u8::from_str_radix(&hex[4..6], 16)?;
 
     if len == 8 {
-        let a = u8::from_str_radix(&hex[6..8], 16)?;
-        Ok(Color::Rgba { r, g, b, a })
+        let alpha = u8::from_str_radix(&hex[6..8], 16)?;
+        Ok(Color::Rgba {
+            r: red,
+            g: green,
+            b: blue,
+            a: alpha,
+        })
     } else {
-        Ok(Color::Rgb { r, g, b })
+        Ok(Color::Rgb {
+            r: red,
+            g: green,
+            b: blue,
+        })
     }
 }
 
+#[must_use]
 pub fn blend_color(foreground: Color, background: Color) -> Color {
     match (foreground, background) {
         (

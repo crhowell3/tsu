@@ -25,6 +25,7 @@ pub struct RenderBuffer {
 }
 
 impl RenderBuffer {
+    #[must_use]
     pub fn new(width: usize, height: usize, default_style: &Style) -> Self {
         let cells = vec![
             Cell {
@@ -41,11 +42,11 @@ impl RenderBuffer {
         }
     }
 
-    #[allow(dead_code)]
+    #[must_use]
     pub fn new_with_contents(
         width: usize,
         height: usize,
-        style: Style,
+        style: &Style,
         contents: Vec<String>,
     ) -> Self {
         let mut cells = vec![];
@@ -99,7 +100,7 @@ impl RenderBuffer {
                     .background
                     .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
             ),
-            _ => color,
+            Color::Rgb { .. } => color,
         });
 
         self.cells[position] = Cell {
@@ -129,6 +130,7 @@ impl RenderBuffer {
         }
     }
 
+    #[must_use]
     pub fn diff(&self, other: &RenderBuffer) -> Vec<Change<'_>> {
         let mut changes = vec![];
         for (pos, cell) in self.cells.iter().enumerate() {

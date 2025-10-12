@@ -22,6 +22,7 @@ pub struct Window {
 }
 
 impl Window {
+    #[must_use]
     pub fn new(buffer_index: usize, position: Point, size: (usize, usize)) -> Self {
         Self {
             buffer_index,
@@ -36,14 +37,17 @@ impl Window {
         }
     }
 
+    #[must_use]
     pub fn inner_width(&self) -> usize {
         self.size.0
     }
 
+    #[must_use]
     pub fn inner_height(&self) -> usize {
         self.size.1
     }
 
+    #[must_use]
     pub fn contains_position(&self, x: usize, y: usize) -> bool {
         x >= self.position.x
             && x < self.position.x + self.size.0
@@ -51,6 +55,7 @@ impl Window {
             && y < self.position.y + self.size.1
     }
 
+    #[must_use]
     pub fn terminal_to_local_transform(
         &self,
         terminal_x: usize,
@@ -63,6 +68,7 @@ impl Window {
         }
     }
 
+    #[must_use]
     pub fn local_to_terminal_transform(&self, local_x: usize, local_y: usize) -> (usize, usize) {
         (self.position.x + local_x, self.position.y + local_y)
     }

@@ -64,6 +64,7 @@ impl Config {
     }
 }
 
+#[must_use]
 pub fn default_false() -> bool {
     false
 }

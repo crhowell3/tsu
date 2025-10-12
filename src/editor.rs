@@ -133,11 +133,7 @@ impl Editor {
         buffers: Vec<Buffer>,
     ) -> anyhow::Result<Self> {
         let stdout = std::io::stdout();
-        let vx = buffers
-            .first()
-            .map(|b| b.len().to_string().len())
-            .unwrap_or(0)
-            + 2;
+        let vx = buffers.first().map_or(0, |b| b.len().to_string().len()) + 2;
         let w = u16::try_from(width).expect("value too large to fit in u16");
         let h = u16::try_from(height).expect("value too large to fit in u16");
         let size = (w, h);
@@ -206,22 +202,27 @@ impl Editor {
         }
     }
 
+    #[must_use]
     pub fn vwidth(&self) -> usize {
         self.size.0 as usize
     }
 
+    #[must_use]
     pub fn vheight(&self) -> usize {
         self.size.1 as usize - 2
     }
 
+    #[must_use]
     pub fn window_to_terminal_x(&self, window: &crate::window::Window, x: usize) -> usize {
         window.position.x + x
     }
 
+    #[must_use]
     pub fn window_to_terminal_y(&self, window: &crate::window::Window, y: usize) -> usize {
         window.position.y + y
     }
 
+    #[must_use]
     pub fn buffer_to_window_coords(
         &self,
         window: &crate::window::Window,
@@ -242,14 +243,17 @@ impl Editor {
         Some((window_x, window_y))
     }
 
+    #[must_use]
     pub fn window_vwidth(&self, window: &crate::window::Window) -> usize {
         window.inner_width()
     }
 
+    #[must_use]
     pub fn window_vheight(&self, window: &crate::window::Window) -> usize {
         window.inner_height()
     }
 
+    #[must_use]
     pub fn cursor_position(&self) -> (usize, usize) {
         (self.vx + self.cursor_x, self.cursor_y)
     }
@@ -460,7 +464,7 @@ impl Editor {
 
         Ok(match self.mode {
             Mode::Normal => self.handle_normal_event(ev),
-            Mode::Insert => self.handle_insert_event(ev)?,
+            Mode::Insert => self.handle_insert_event(ev),
             Mode::Command => self.handle_command_event(ev),
             Mode::Visual => self.handle_visual_event(ev),
             Mode::Replace => self.handle_replace_event(ev),
@@ -521,18 +525,18 @@ impl Editor {
         self.event_to_key_action(&normal, ev)
     }
 
-    fn handle_insert_event(&mut self, ev: &event::Event) -> anyhow::Result<Option<KeyAction>> {
+    fn handle_insert_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
         let insert = self.config.keys.insert.clone();
         if let Some(key_action) = self.event_to_key_action(&insert, ev) {
-            return Ok(Some(key_action));
+            return Some(key_action);
         }
 
         match ev {
             Event::Key(event) => match event.code {
-                KeyCode::Char(c) => Ok(KeyAction::Single(Action::InsertCharAtCursor(c)).into()),
-                _ => Ok(None),
+                KeyCode::Char(c) => KeyAction::Single(Action::InsertCharAtCursor(c)).into(),
+                _ => None,
             },
-            _ => Ok(None),
+            _ => None,
         }
     }
 
@@ -898,8 +902,7 @@ impl Editor {
                 self.current_buffer_mut().remove(cursor_x, line);
             }
             Action::ReplaceLineAt(y, contents) => {
-                self.current_buffer_mut()
-                    .replace_line(*y, contents.to_string());
+                self.current_buffer_mut().replace_line(*y, contents);
             }
             Action::InsertNewLine => {
                 self.insert_undo_actions.extend(vec![
@@ -921,7 +924,7 @@ impl Editor {
                 let after_cursor = current_line[self.cursor_x..].to_string();
 
                 let line = self.buffer_line();
-                self.current_buffer_mut().replace_line(line, before_cursor);
+                self.current_buffer_mut().replace_line(line, &before_cursor);
 
                 self.cursor_x = spaces;
                 self.cursor_y += 1;
@@ -934,7 +937,7 @@ impl Editor {
                 let new_line = format!("{}{}", " ".repeat(spaces), &after_cursor);
                 let line = self.buffer_line();
 
-                self.current_buffer_mut().insert_line(line, new_line);
+                self.current_buffer_mut().insert_line(line, &new_line);
             }
             Action::InsertLineAbove => {
                 self.undoable_actions
@@ -952,7 +955,7 @@ impl Editor {
 
                 let line = self.buffer_line();
                 self.current_buffer_mut()
-                    .insert_line(line, " ".repeat(leading_spaces));
+                    .insert_line(line, &" ".repeat(leading_spaces));
                 self.cursor_x = leading_spaces;
             }
             Action::InsertLineBelow => {
@@ -963,7 +966,7 @@ impl Editor {
                 let line = self.buffer_line();
 
                 self.current_buffer_mut()
-                    .insert_line(line + 1, " ".repeat(leading_spaces));
+                    .insert_line(line + 1, &" ".repeat(leading_spaces));
                 self.cursor_y += 1;
                 self.cursor_x = leading_spaces;
 
@@ -976,8 +979,7 @@ impl Editor {
                 self.undoable_actions
                     .push(Action::DeleteLineAt(self.buffer_line()));
                 if let Some(contents) = contents {
-                    self.current_buffer_mut()
-                        .insert_line(*line, contents.to_string());
+                    self.current_buffer_mut().insert_line(*line, contents);
                 }
             }
             Action::DeleteCurrentLine => {
@@ -1272,8 +1274,7 @@ impl Editor {
             }
             Action::InsertLineBelow => {
                 let line = self.buffer_line();
-                self.current_buffer_mut()
-                    .insert_line(line + 1, "".to_owned());
+                self.current_buffer_mut().insert_line(line + 1, "");
                 self.cursor_y += 1;
                 self.cursor_x = 0;
                 self.mode = Mode::Insert;
@@ -1282,7 +1283,7 @@ impl Editor {
             }
             Action::InsertLineAbove => {
                 let line = self.buffer_line();
-                self.current_buffer_mut().insert_line(line, "".to_owned());
+                self.current_buffer_mut().insert_line(line, "");
                 self.cursor_x = 0;
                 self.mode = Mode::Insert;
                 needs_render = true;
@@ -1331,7 +1332,7 @@ impl Editor {
                 let after_cursor = current_line[cursor_x..].to_string();
 
                 let line = self.buffer_line();
-                self.current_buffer_mut().replace_line(line, before_cursor);
+                self.current_buffer_mut().replace_line(line, &before_cursor);
 
                 self.cursor_x = spaces;
                 self.cursor_y += 1;
@@ -1343,7 +1344,7 @@ impl Editor {
 
                 let new_line = format!("{}{}", " ".repeat(spaces), &after_cursor);
                 let line = self.buffer_line();
-                self.current_buffer_mut().insert_line(line, new_line);
+                self.current_buffer_mut().insert_line(line, &new_line);
                 needs_render = true;
                 should_quit = false;
             }
@@ -1428,7 +1429,7 @@ impl Editor {
                         let joined =
                             format!("{}{}", prev_content.trim_end(), current_content.trim_end());
 
-                        self.current_buffer_mut().replace_line(prev_line, joined);
+                        self.current_buffer_mut().replace_line(prev_line, &joined);
                         self.current_buffer_mut().remove_line(current_line);
 
                         self.set_cursor_line(prev_line);
