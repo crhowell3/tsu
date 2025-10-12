@@ -1,24 +1,31 @@
-use std::{collections::HashMap, io::Write, mem};
+pub mod render;
+pub mod render_buffer;
+
+use std::{cmp::Ordering, collections::HashMap, mem};
 
 use crossterm::{
-    ExecutableCommand, QueueableCommand, cursor,
-    event::{self, Event, EventStream, KeyCode, KeyModifiers},
-    style::{self},
+    ExecutableCommand,
+    event::{self, Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
     terminal,
 };
 use futures::{StreamExt, future::FutureExt, select};
 use serde::{Deserialize, Serialize};
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::action::Action;
 use crate::{
+    action::Action,
     buffer::Buffer,
+    color::Color,
     command,
     config::{Config, KeyAction},
+    debug,
+    editor::render_buffer::RenderBuffer,
     highlighter::Highlighter,
     log,
     theme::{Style, Theme},
     unicode,
+    unicode::{byte_to_char, char_to_byte, next_grapheme_boundary, prev_grapheme_boundary},
+    window_manager::WindowManager,
 };
 
 #[allow(unused)]
@@ -51,97 +58,42 @@ impl StyleInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Cell {
-    c: char,
-    style: Style,
+#[derive(Debug, Clone, Copy)]
+pub struct Point {
+    pub x: usize,
+    pub y: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct RenderBuffer {
-    cells: Vec<Cell>,
-    width: usize,
-    #[allow(dead_code)]
-    height: usize,
-}
-
-impl RenderBuffer {
-    #[allow(dead_code)]
-    fn new_with_contents(width: usize, height: usize, style: Style, contents: Vec<String>) -> Self {
-        let mut cells = vec![];
-
-        for line in contents {
-            for c in line.chars() {
-                cells.push(Cell { c, style });
-            }
-            for _ in 0..width.saturating_sub(line.len()) {
-                cells.push(Cell { c: ' ', style });
-            }
-        }
-
-        Self {
-            cells,
-            width,
-            height,
-        }
-    }
-
-    fn new(width: usize, height: usize, default_style: Style) -> Self {
-        let cells = vec![
-            Cell {
-                c: ' ',
-                style: default_style,
-            };
-            width * height
-        ];
-
-        Self {
-            cells,
-            width,
-            height,
-        }
-    }
-
-    fn set_char(&mut self, x: usize, y: usize, c: char, style: &Style) {
-        let pos = (y * self.width) + x;
-        self.cells[pos] = Cell { c, style: *style };
-    }
-
-    fn set_text(&mut self, x: usize, y: usize, text: &str, style: &Style) {
-        let pos = (y * self.width) + x;
-        for (i, c) in text.chars().enumerate() {
-            self.cells[pos + i] = Cell { c, style: *style }
-        }
-    }
-
-    fn diff(&self, other: &RenderBuffer) -> Vec<Change<'_>> {
-        let mut changes = vec![];
-        for (pos, cell) in self.cells.iter().enumerate() {
-            if *cell != other.cells[pos] {
-                let y = pos / self.width;
-                let x = pos % self.width;
-
-                changes.push(Change { x, y, cell });
-            }
-        }
-
-        changes
+impl Point {
+    #[must_use]
+    pub fn new(x: usize, y: usize) -> Self {
+        Self { x, y }
     }
 }
 
-#[derive(Debug)]
-pub struct Change<'a> {
-    x: usize,
-    y: usize,
-    cell: &'a Cell,
+impl PartialEq for Point {
+    fn eq(&self, other: &Self) -> bool {
+        self.x == other.x && self.y == other.y
+    }
+}
+
+impl PartialOrd for Point {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self.y.cmp(&other.y) {
+            Ordering::Equal => self.x.partial_cmp(&other.x),
+            ordering => Some(ordering),
+        }
+    }
 }
 
 pub struct Editor {
     config: Config,
     pub theme: Theme,
     highlighter: Highlighter,
-    buffer: Buffer,
+    buffers: Vec<Buffer>,
+    current_buffer_index: usize,
     size: (u16, u16),
+    window_manager: WindowManager,
     stdout: std::io::Stdout,
     vtop: usize,
     vleft: usize,
@@ -165,7 +117,7 @@ impl Editor {
     /// - `height`: The desired height of the editor viewport
     /// - `config`: A configuration constructed from a parsed config file
     /// - `theme`: A theme for coloring, styling, and decorating the editor
-    /// - `buffer`: A buffer which will contain the contents of the file being edited
+    /// - `buffers`: A buffer which will contain the contents of the file being edited
     ///
     /// # Errors
     /// Can return errors if `width` and `height` are larger than `u16::MAX` or if creating a new
@@ -178,20 +130,24 @@ impl Editor {
         height: usize,
         config: Config,
         theme: Theme,
-        buffer: Buffer,
+        buffers: Vec<Buffer>,
     ) -> anyhow::Result<Self> {
         let stdout = std::io::stdout();
-        let vx = buffer.len().to_string().len() + 2;
+        let vx = buffers.first().map_or(0, |b| b.len().to_string().len()) + 2;
         let w = u16::try_from(width).expect("value too large to fit in u16");
         let h = u16::try_from(height).expect("value too large to fit in u16");
         let size = (w, h);
         let highlighter = Highlighter::new(&theme)?;
 
+        let window_manager = WindowManager::new(0, (width, height));
+
         Ok(Self {
             config,
             theme,
-            buffer,
+            buffers,
+            current_buffer_index: 0,
             highlighter,
+            window_manager,
             stdout,
             vtop: 0,
             vleft: 0,
@@ -214,26 +170,98 @@ impl Editor {
     /// # Arguments
     /// - `config`: A configuration constructed from a parsed config file
     /// - `theme`: A theme for coloring, styling, and decorating the editor
-    /// - `buffer`: A buffer which will contain the contents of the file being edited
+    /// - `buffers`: A buffer which will contain the contents of the file being edited
     ///
     /// # Errors
     /// Can return an `IoError` if the call to query the terminal's size fails
-    pub fn new(config: Config, theme: Theme, buffer: Buffer) -> anyhow::Result<Self> {
+    pub fn new(config: Config, theme: Theme, buffers: Vec<Buffer>) -> anyhow::Result<Self> {
         let size = terminal::size()?;
-        Self::with_size(size.0 as usize, size.1 as usize, config, theme, buffer)
+        Self::with_size(size.0 as usize, size.1 as usize, config, theme, buffers)
     }
 
-    fn vwidth(&self) -> usize {
+    #[allow(unused)]
+    fn sync_with_window(&mut self) {
+        if let Some(window) = self.window_manager.active_window() {
+            self.current_buffer_index = window.buffer_index;
+            self.vtop = window.vtop;
+            self.vleft = window.vleft;
+            self.cursor_x = window.cursor_x;
+            self.cursor_y = window.cursor_y;
+            self.vx = window.vx;
+        }
+    }
+
+    fn sync_to_window(&mut self) {
+        if let Some(window) = self.window_manager.active_window_mut() {
+            window.buffer_index = self.current_buffer_index;
+            window.vtop = self.vtop;
+            window.vleft = self.vleft;
+            window.cursor_x = self.cursor_x;
+            window.cursor_y = self.cursor_y;
+            window.vx = self.vx;
+        }
+    }
+
+    #[must_use]
+    pub fn vwidth(&self) -> usize {
         self.size.0 as usize
     }
 
-    fn vheight(&self) -> usize {
+    #[must_use]
+    pub fn vheight(&self) -> usize {
         self.size.1 as usize - 2
+    }
+
+    #[must_use]
+    pub fn window_to_terminal_x(&self, window: &crate::window::Window, x: usize) -> usize {
+        window.position.x + x
+    }
+
+    #[must_use]
+    pub fn window_to_terminal_y(&self, window: &crate::window::Window, y: usize) -> usize {
+        window.position.y + y
+    }
+
+    #[must_use]
+    pub fn buffer_to_window_coords(
+        &self,
+        window: &crate::window::Window,
+        buf_x: usize,
+        buf_y: usize,
+    ) -> Option<(usize, usize)> {
+        if buf_y < window.vtop || buf_y >= window.vtop + window.inner_height() {
+            return None;
+        }
+
+        if buf_x < window.vleft || buf_x >= window.vleft + window.inner_width() {
+            return None;
+        }
+
+        let window_x = buf_x - window.vleft;
+        let window_y = buf_y - window.vtop;
+
+        Some((window_x, window_y))
+    }
+
+    #[must_use]
+    pub fn window_vwidth(&self, window: &crate::window::Window) -> usize {
+        window.inner_width()
+    }
+
+    #[must_use]
+    pub fn window_vheight(&self, window: &crate::window::Window) -> usize {
+        window.inner_height()
+    }
+
+    #[must_use]
+    pub fn cursor_position(&self) -> (usize, usize) {
+        (self.vx + self.cursor_x, self.cursor_y)
     }
 
     fn line_length(&self) -> usize {
         if let Some(line) = self.view_line(self.cursor_y) {
-            return line.len();
+            let line = line.trim_end_matches('\n');
+            return line.chars().count();
         }
         0
     }
@@ -244,84 +272,28 @@ impl Editor {
 
     fn view_line(&self, n: usize) -> Option<String> {
         let line = self.vtop + n;
-        self.buffer.get(line)
+
+        self.current_buffer().get(line)
     }
 
-    fn set_cursor_style(&mut self) -> anyhow::Result<()> {
-        self.stdout.queue(match self.waiting_key_action {
-            Some(_) => cursor::SetCursorStyle::SteadyUnderScore,
-            _ => match self.mode {
-                Mode::Insert => cursor::SetCursorStyle::SteadyBar,
-                _ => cursor::SetCursorStyle::DefaultUserShape,
-            },
-        })?;
+    fn current_buffer(&self) -> &Buffer {
+        &self.buffers[self.current_buffer_index]
+    }
 
-        Ok(())
+    fn current_buffer_mut(&mut self) -> &mut Buffer {
+        &mut self.buffers[self.current_buffer_index]
+    }
+
+    fn modified_buffers(&self) -> Vec<&str> {
+        self.buffers
+            .iter()
+            .filter(|b| b.is_dirty())
+            .map(|b| b.name())
+            .collect()
     }
 
     fn gutter_width(&self) -> usize {
-        self.buffer.len().to_string().len() + 1
-    }
-
-    fn draw_gutter(&mut self, buffer: &mut RenderBuffer) {
-        let width = self.gutter_width();
-        let foreground = self.theme.gutter_style.foreground.unwrap_or(
-            self.theme
-                .style
-                .foreground
-                .expect("foreground is defined for theme"),
-        );
-        let background = self.theme.gutter_style.background.unwrap_or(
-            self.theme
-                .style
-                .background
-                .expect("background is defined for theme"),
-        );
-
-        for n in 0..self.vheight() {
-            let line_number = n + 1 + self.vtop;
-            let text = if line_number <= self.buffer.len() {
-                line_number.to_string()
-            } else if line_number <= self.buffer.len() + 1 {
-                "~".to_string()
-            } else {
-                " ".repeat(width)
-            };
-
-            buffer.set_text(
-                0,
-                n,
-                &format!("{text:>width$} "),
-                &Style {
-                    foreground: Some(foreground),
-                    background: Some(background),
-                    ..Default::default()
-                },
-            );
-        }
-    }
-
-    /// Draws the cursor based on current style and position
-    ///
-    /// # Arguments
-    /// - `buffer`: The buffer containing the cursor
-    ///
-    /// # Errors
-    /// Can return an error if `set_cursor_style` fails or if the stdout queue fails to move the
-    /// cursor
-    ///
-    /// # Panics
-    /// This function might panic if the numeric values of the cursor's target (x, y) position
-    /// exceed `u16::MAX`
-    pub fn draw_cursor(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
-        self.set_cursor_style()?;
-        self.stdout.queue(cursor::MoveTo(
-            u16::try_from(self.vx + self.cursor_x).expect("value too large to fit in u16"),
-            u16::try_from(self.cursor_y).expect("value too large to fit in u16"),
-        ))?;
-        self.draw_status_line(buffer);
-
-        Ok(())
+        self.current_buffer().len().to_string().len() + 1
     }
 
     /// Wrapper for the editor's highlighter functionality
@@ -334,190 +306,6 @@ impl Editor {
     /// Could potentially return an error if the highlighter throws an error
     pub fn highlight(&mut self, code: &str) -> anyhow::Result<Vec<StyleInfo>> {
         self.highlighter.highlight(code)
-    }
-
-    fn fill_line(&mut self, buffer: &mut RenderBuffer, x: usize, y: usize, style: &Style) {
-        let width = self.vwidth().saturating_sub(x);
-        let line_fill = " ".repeat(width);
-        buffer.set_text(x, y, &line_fill, style);
-    }
-
-    fn draw_line(&mut self, buffer: &mut RenderBuffer) {
-        let line = self.view_line(self.cursor_y).unwrap_or_default();
-        let style_info = self.highlight(&line).unwrap_or_default();
-        let default_style = self.theme.style;
-
-        let mut x = self.vx;
-        let mut iter = line.chars().enumerate().peekable();
-
-        while let Some((pos, c)) = iter.next() {
-            if c == '\n' || iter.peek().is_none() {
-                if c != '\n' {
-                    buffer.set_char(x, self.cursor_y, c, &default_style);
-                    x += 1;
-                }
-                self.fill_line(buffer, x, self.cursor_y, &default_style);
-                break;
-            }
-
-            if x < self.vwidth() {
-                if let Some(style) = determine_style_for_position(&style_info, pos) {
-                    buffer.set_char(x, self.cursor_y, c, &style);
-                } else {
-                    buffer.set_char(x, self.cursor_y, c, &default_style);
-                }
-            }
-            x += 1;
-        }
-    }
-
-    /// Draws the main view within the editor buffer
-    ///
-    /// # Arguments
-    /// - `buffer`: The buffer containing the view
-    ///
-    /// # Errors
-    /// May return an error if the highlighter fails
-    pub fn draw_view(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
-        let vbuffer = self.buffer.view(self.vtop, self.vheight());
-        let style_info = self.highlight(&vbuffer)?;
-        let vheight = self.vheight();
-        let default_style = self.theme.style;
-
-        let mut x = self.vx;
-        let mut y = 0;
-        let mut iter = vbuffer.chars().enumerate().peekable();
-
-        while let Some((pos, c)) = iter.next() {
-            if c == '\n' || iter.peek().is_none() {
-                if c != '\n' {
-                    buffer.set_char(x, y, c, &default_style);
-                    x += 1;
-                }
-                self.fill_line(buffer, x, y, &default_style);
-                x = self.vx;
-                y += 1;
-                if y > vheight {
-                    break;
-                }
-                continue;
-            }
-
-            if x < self.vwidth() {
-                if let Some(style) = determine_style_for_position(&style_info, pos) {
-                    buffer.set_char(x, y, c, &style);
-                } else {
-                    buffer.set_char(x, y, c, &default_style);
-                }
-            }
-
-            x += 1;
-        }
-
-        while y < vheight {
-            self.fill_line(buffer, self.vx, y, &default_style);
-            y += 1;
-        }
-
-        self.draw_gutter(buffer);
-
-        Ok(())
-    }
-
-    /// Draws the status line at the bottom of the editor view
-    ///
-    /// # Arguments
-    /// - `buffer`: The buffer containing the status line
-    ///
-    /// # Panics
-    /// This function may panic if the lengths of the mode and position strings exceed `u16::MAX`,
-    /// which is currently impossible for the mode string but is not necessarily impossible for the
-    /// position string
-    pub fn draw_status_line(&mut self, buffer: &mut RenderBuffer) {
-        let mode_str = format!(" {:?} ", self.mode).to_uppercase();
-        let file_str = format!(" {}", self.buffer.file.as_deref().unwrap_or("[No Name]"));
-        let position_str = format!(
-            " {}:{} ",
-            self.cursor_y + self.vtop + 1,
-            self.cursor_x + self.vleft + 1
-        );
-
-        // Calculate file string width dynamically
-        let mode_string_length =
-            u16::try_from(mode_str.len()).expect("value too large to fit in u16");
-        let position_string_length =
-            u16::try_from(position_str.len()).expect("value too large to fit in u16");
-        let file_str_width = self.size.0 - mode_string_length - position_string_length - 2;
-        let y = self.size.1 as usize - 2;
-
-        let transition_style = Style {
-            foreground: self.theme.status_line_style.outer_style.background,
-            background: self.theme.status_line_style.inner_style.background,
-            ..Default::default()
-        };
-
-        buffer.set_text(0, y, &mode_str, &self.theme.status_line_style.outer_style);
-
-        buffer.set_text(
-            mode_str.len(),
-            y,
-            &self.theme.status_line_style.outer_chars[1].to_string(),
-            &transition_style,
-        );
-
-        buffer.set_text(
-            mode_str.len() + 1,
-            y,
-            &format!("{:<width$}", file_str, width = file_str_width as usize),
-            &self.theme.status_line_style.inner_style,
-        );
-
-        buffer.set_text(
-            mode_str.len() + 1 + file_str_width as usize,
-            y,
-            &self.theme.status_line_style.outer_chars[2].to_string(),
-            &transition_style,
-        );
-
-        buffer.set_text(
-            mode_str.len() + 2 + file_str_width as usize,
-            y,
-            &position_str,
-            &self.theme.status_line_style.outer_style,
-        );
-    }
-
-    fn draw_command_line(&mut self, buffer: &mut RenderBuffer) {
-        let style = &self.theme.style;
-        let y = self.size.1 as usize - 1;
-
-        if !self.is_command() {
-            let wc = if let Some(ref waiting_command) = self.waiting_command {
-                waiting_command.clone()
-            } else {
-                " ".repeat(10)
-            };
-
-            if let Some(ref last_error) = self.last_error {
-                let error = format!("{:width$}", last_error, width = self.size.0 as usize);
-                buffer.set_text(0, self.size.1 as usize - 1, &error, style);
-            } else {
-                let clear_line = " ".repeat(self.size.0 as usize - 10);
-                buffer.set_text(0, y, &clear_line, style);
-            }
-
-            buffer.set_text(self.size.0 as usize - 10, y, &wc, style);
-
-            return;
-        }
-
-        let cmd_line = format!(
-            ":{:width$}",
-            self.command,
-            width = self.size.0 as usize - self.command.len() - 1
-        );
-
-        buffer.set_text(0, self.size.1 as usize - 1, &cmd_line, style);
     }
 
     #[allow(dead_code)]
@@ -536,10 +324,10 @@ impl Editor {
     fn check_bounds(&mut self) {
         let line_len = self.line_length();
 
-        if self.cursor_x >= line_len && !self.is_insert() {
+        if self.cursor_x >= line_len && self.is_normal() {
             if line_len > 0 {
                 self.cursor_x = self.line_length() - 1;
-            } else if !self.is_insert() {
+            } else if self.is_normal() {
                 self.cursor_x = 0;
             }
         }
@@ -549,71 +337,9 @@ impl Editor {
         }
 
         let line_in_buffer = self.cursor_y + self.vtop;
-        if line_in_buffer > self.buffer.len() - 1 {
-            self.cursor_y = self.buffer.len() - self.vtop - 1;
+        if line_in_buffer > self.current_buffer().len().saturating_sub(1) {
+            self.cursor_y = self.current_buffer().len() - self.vtop - 1;
         }
-    }
-
-    fn render_diff(&mut self, change_set: Vec<Change>) -> anyhow::Result<()> {
-        for change in change_set {
-            let x = u16::try_from(change.x).expect("value too large to fit in u16");
-            let y = u16::try_from(change.y).expect("value too large to fit in u16");
-            let cell = change.cell;
-
-            self.stdout.queue(cursor::MoveTo(x, y))?;
-            if let Some(background) = cell.style.background {
-                self.stdout
-                    .queue(style::SetBackgroundColor(background.into()))?;
-            }
-            if let Some(foreground) = cell.style.foreground {
-                self.stdout
-                    .queue(style::SetForegroundColor(foreground.into()))?;
-            }
-            self.stdout.queue(style::Print(cell.c))?;
-        }
-
-        self.set_cursor_style()?;
-        self.stdout
-            .queue(cursor::MoveTo(
-                u16::try_from(self.vx + self.cursor_x).expect("value too large to fit in u16"),
-                u16::try_from(self.cursor_y).expect("value too large to fit in u16"),
-            ))?
-            .flush()?;
-
-        Ok(())
-    }
-
-    fn render(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
-        self.draw_view(buffer)?;
-        self.draw_gutter(buffer);
-        self.draw_status_line(buffer);
-
-        self.stdout
-            .queue(terminal::Clear(terminal::ClearType::All))?
-            .queue(cursor::MoveTo(0, 0))?;
-
-        let mut current_style = &self.theme.style;
-
-        for cell in &buffer.cells {
-            if cell.style != *current_style {
-                if let Some(background) = cell.style.background {
-                    self.stdout
-                        .queue(style::SetBackgroundColor(background.into()))?;
-                }
-                if let Some(foreground) = cell.style.foreground {
-                    self.stdout
-                        .queue(style::SetForegroundColor(foreground.into()))?;
-                }
-                current_style = &cell.style;
-            }
-
-            self.stdout.queue(style::Print(cell.c))?;
-        }
-
-        self.draw_cursor(buffer)?;
-        self.stdout.flush()?;
-
-        Ok(())
     }
 
     /// Executes the primary run loop for the application
@@ -628,8 +354,11 @@ impl Editor {
             .execute(terminal::EnterAlternateScreen)?
             .execute(terminal::Clear(terminal::ClearType::All))?;
 
-        let mut buffer =
-            RenderBuffer::new(self.size.0 as usize, self.size.1 as usize, self.theme.style);
+        let mut buffer = RenderBuffer::new(
+            self.size.0 as usize,
+            self.size.1 as usize,
+            &Style::default(),
+        );
 
         self.render(&mut buffer)?;
 
@@ -642,55 +371,35 @@ impl Editor {
                 maybe_event = event => {
                     match maybe_event {
                         Some(Ok(ev)) => {
-                            let current_buffer = buffer.clone();
                             self.check_bounds();
 
                             if let event::Event::Resize(width, height) = ev {
                                 self.size = (width, height);
+                                let max_y = height as usize - 2;
+                                if self.cursor_y > max_y - 1 {
+                                    self.cursor_y = max_y - 1;
+                                }
+
+                                self.window_manager.resize((width as usize, height as usize));
+                                self.sync_to_window();
                                 buffer = RenderBuffer::new(
                                     self.size.0 as usize,
                                     self.size.1 as usize,
-                                    self.theme.style,
+                                    &Style::default(),
                                 );
+
                                 self.render(&mut buffer)?;
                                 continue;
                             }
 
-                            if let Some(action) = self.handle_event(&ev) {
-                                let quit = match action {
-                                    KeyAction::Single(action) => self.execute(&action, &mut buffer).await?,
-                                    KeyAction::Multiple(actions) => {
-                                        let mut quit = false;
-                                        for action in actions {
-                                            if self.execute(&action, &mut buffer).await? {
-                                                quit = true;
-                                                break;
-                                            }
-                                        }
-                                        quit
-                                    }
-                                    KeyAction::Nested(actions) => {
-                                        if let Event::Key(event::KeyEvent {
-                                            code: KeyCode::Char(c),
-                                            ..
-                                        }) = ev {
-                                            self.waiting_command = Some(format!("{c}"));
-                                        }
-                                        self.waiting_key_action = Some(KeyAction::Nested(actions));
-                                        false
-                                    }
-                                    _ => {false}
-                                };
-
-                                if quit {
+                            if let Some(action) = self.handle_event(&ev)?
+                                && self.handle_key_action(&ev, &action, &mut buffer).await? {
                                     break;
                                 }
-                            }
-
-                            self.redraw(&current_buffer, &mut buffer)?;
+                            self.render(&mut buffer)?;
                         },
-                        Some(Err(_error)) => {
-
+                        Some(Err(error)) => {
+                            log!("error: {error}");
                         },
                         None => {}
                     }
@@ -701,33 +410,65 @@ impl Editor {
         Ok(())
     }
 
-    fn redraw(
+    #[async_recursion::async_recursion]
+    async fn handle_key_action(
         &mut self,
-        current_buffer: &RenderBuffer,
+        ev: &event::Event,
+        action: &KeyAction,
         buffer: &mut RenderBuffer,
-    ) -> anyhow::Result<()> {
-        self.stdout.execute(cursor::Hide)?;
-        self.draw_status_line(buffer);
-        self.draw_gutter(buffer);
-        self.draw_command_line(buffer);
-        self.render_diff(buffer.diff(current_buffer))?;
-        self.draw_cursor(buffer)?;
-        self.stdout.execute(cursor::Show)?;
-        Ok(())
+    ) -> anyhow::Result<bool> {
+        let quit = match action {
+            KeyAction::None => false,
+            KeyAction::Single(action) => self.execute(action, buffer).await?,
+            KeyAction::Multiple(actions) => {
+                let mut quit = false;
+                for action in actions {
+                    if self.execute(action, buffer).await? {
+                        quit = true;
+                        break;
+                    }
+                }
+                quit
+            }
+            KeyAction::Nested(actions) => {
+                if let Event::Key(KeyEvent {
+                    code: KeyCode::Char(c),
+                    ..
+                }) = ev
+                {
+                    self.waiting_command = Some(format!("{c}"));
+                }
+                self.waiting_key_action = Some(KeyAction::Nested(actions.clone()));
+                false
+            }
+            KeyAction::Repeating(times, action) => {
+                let mut quit = false;
+                for _ in 0..*times as usize {
+                    if self.handle_key_action(ev, action, buffer).await? {
+                        quit = true;
+                        break;
+                    }
+                }
+                quit
+            }
+        };
+
+        Ok(quit)
     }
 
-    fn handle_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
+    fn handle_event(&mut self, ev: &event::Event) -> anyhow::Result<Option<KeyAction>> {
         if let Some(key_action) = self.waiting_key_action.take() {
             self.waiting_command = None;
-            return self.handle_waiting_command(key_action, ev);
+            return Ok(self.handle_waiting_command(key_action, ev));
         }
-        match self.mode {
+
+        Ok(match self.mode {
             Mode::Normal => self.handle_normal_event(ev),
             Mode::Insert => self.handle_insert_event(ev),
             Mode::Command => self.handle_command_event(ev),
             Mode::Visual => self.handle_visual_event(ev),
             Mode::Replace => self.handle_replace_event(ev),
-        }
+        })
     }
 
     fn handle_command(&mut self, cmd: &str) -> Vec<Action> {
@@ -780,11 +521,13 @@ impl Editor {
     }
 
     fn handle_normal_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
-        self.event_to_key_action(&self.config.keys.normal, ev)
+        let normal = self.config.keys.normal.clone();
+        self.event_to_key_action(&normal, ev)
     }
 
     fn handle_insert_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
-        if let Some(key_action) = self.event_to_key_action(&self.config.keys.insert, ev) {
+        let insert = self.config.keys.insert.clone();
+        if let Some(key_action) = self.event_to_key_action(&insert, ev) {
             return Some(key_action);
         }
 
@@ -878,31 +621,42 @@ impl Editor {
     }
 
     fn current_line_contents(&self) -> Option<String> {
-        self.buffer.get(self.buffer_line())
+        self.current_buffer().get(self.buffer_line())
     }
 
-    #[allow(clippy::too_many_lines)]
-    #[async_recursion::async_recursion]
     async fn execute(
         &mut self,
         action: &Action,
         buffer: &mut RenderBuffer,
     ) -> anyhow::Result<bool> {
+        self.execute_with_tracking(action, buffer, true).await
+    }
+
+    #[allow(clippy::too_many_lines)]
+    #[async_recursion::async_recursion]
+    async fn execute_with_tracking(
+        &mut self,
+        action: &Action,
+        buffer: &mut RenderBuffer,
+        _tracking: bool,
+    ) -> anyhow::Result<bool> {
         self.last_error = None;
+
         match action {
             Action::Quit(force) => {
                 if *force {
                     return Ok(true);
                 }
 
-                if !self.buffer.dirty {
+                let modified_buffers = self.modified_buffers();
+                if modified_buffers.is_empty() {
                     return Ok(true);
                 }
 
                 self.last_error = Some("Buffer has unwritten changes".to_string());
                 return Ok(false);
             }
-            Action::Save => match self.buffer.save() {
+            Action::Save => match self.current_buffer_mut().save() {
                 Ok(msg) => {
                     self.last_error = Some(msg);
                 }
@@ -910,7 +664,8 @@ impl Editor {
                     self.last_error = Some(e.to_string());
                 }
             },
-            Action::SaveAs(new_file_name) => match self.buffer.save_as(new_file_name) {
+            Action::SaveAs(new_file_name) => match self.current_buffer_mut().save_as(new_file_name)
+            {
                 Ok(msg) => {
                     self.last_error = Some(msg);
                 }
@@ -943,39 +698,72 @@ impl Editor {
                 } else if distance_to_center < 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
                     let new_vtop = self.vtop.saturating_sub(distance_to_center);
-                    if self.buffer.len() > self.vtop + distance_to_center && new_vtop != self.vtop {
+                    if self.current_buffer().len() > self.vtop + distance_to_center
+                        && new_vtop != self.vtop
+                    {
                         self.vtop = new_vtop;
                         self.cursor_y = view_center;
                     }
                 }
-                self.draw_view(buffer)?;
             }
             Action::MoveUp => {
                 if self.cursor_y == 0 {
                     if self.vtop > 0 {
                         self.vtop -= 1;
-                        self.draw_view(buffer)?;
                     }
                 } else {
                     self.cursor_y = self.cursor_y.saturating_sub(1);
+                    self.draw_cursor()?;
                 }
             }
             Action::MoveDown => {
-                self.cursor_y += 1;
-                if self.cursor_y >= self.vheight() {
-                    self.vtop += 1;
-                    self.cursor_y -= 1;
-                    self.draw_view(buffer)?;
+                if self.vtop + self.cursor_y < self.current_buffer().len() - 1 {
+                    self.cursor_y += 1;
+                    if self.cursor_y >= self.vheight() {
+                        self.vtop += 1;
+                        self.cursor_y -= 1;
+                    }
+                } else {
+                    self.draw_cursor()?;
                 }
             }
             Action::MoveLeft => {
-                _ = self.cursor_x.saturating_sub(1);
-                if self.cursor_x < self.vleft {
-                    self.cursor_x = self.vleft;
+                if let Some(line) = self.current_line_contents() {
+                    let line = line.trim_end_matches('\n');
+
+                    let current_byte = self
+                        .current_buffer()
+                        .column_to_char_index(self.cursor_x, self.buffer_line());
+                    let byte_offset = char_to_byte(line, current_byte);
+
+                    if let Some(prev_byte) = prev_grapheme_boundary(line, byte_offset) {
+                        let char_idx = byte_to_char(line, prev_byte);
+                        self.cursor_x = char_idx;
+                    } else if self.cursor_x > 0 {
+                        self.cursor_x = 0;
+                    }
+
+                    if self.cursor_x < self.vleft {
+                        self.cursor_x = self.vleft;
+                    }
                 }
             }
             Action::MoveRight => {
-                self.cursor_x += 1;
+                if let Some(line) = self.current_line_contents() {
+                    let line = line.trim_end_matches('\n');
+                    let max_chars = line.chars().count();
+
+                    if self.cursor_x < max_chars {
+                        let current_byte = char_to_byte(line, self.cursor_x);
+
+                        if let Some(next_byte) = next_grapheme_boundary(line, current_byte) {
+                            let char_idx = byte_to_char(line, next_byte);
+                            self.cursor_x = char_idx.min(max_chars);
+                        } else {
+                            self.cursor_x = max_chars;
+                        }
+                    }
+                }
             }
             Action::MoveTo(x, y) => {
                 self.go_to_line(*y, buffer, GoToLinePosition::Center)
@@ -991,12 +779,10 @@ impl Editor {
             Action::MoveToTopOfBuffer => {
                 self.vtop = 0;
                 self.cursor_y = 0;
-                self.draw_view(buffer)?;
             }
             Action::MoveToBottomOfBuffer => {
-                self.vtop = self.buffer.len() - self.vheight();
+                self.vtop = self.current_buffer().len() - self.vheight();
                 self.cursor_y = self.vheight() - 1;
-                self.draw_view(buffer)?;
             }
             Action::MoveToLineStart => {
                 self.cursor_x = 0;
@@ -1018,16 +804,14 @@ impl Editor {
                         let new_vtop = self.vtop + distance_to_center;
                         self.vtop = new_vtop;
                         self.cursor_y = view_center;
-                        self.draw_view(buffer)?;
                     }
                 } else if distance_to_center < 0 {
                     let distance_to_center = distance_to_center.unsigned_abs();
                     let new_vtop = self.vtop.saturating_sub(distance_to_center);
                     let distance_to_go = self.vtop + distance_to_center;
-                    if self.buffer.len() > distance_to_go && new_vtop != self.vtop {
+                    if self.current_buffer().len() > distance_to_go && new_vtop != self.vtop {
                         self.vtop = new_vtop;
                         self.cursor_y = view_center;
-                        self.draw_view(buffer)?;
                     }
                 }
             }
@@ -1036,11 +820,10 @@ impl Editor {
                 if line > self.vtop + self.vheight() {
                     self.vtop = line - self.vheight();
                     self.cursor_y = self.vheight() - 1;
-                    self.draw_view(buffer)?;
                 }
             }
             Action::MoveViewDownOneLine => {
-                if self.vtop < self.buffer.len() - self.vheight() {
+                if self.vtop < self.current_buffer().len() - self.vheight() {
                     self.vtop += 1;
                     if self.cursor_y > 5 {
                         self.cursor_y = self.cursor_y.saturating_sub(1);
@@ -1048,7 +831,6 @@ impl Editor {
                         self.cursor_y = 5;
                     }
                 }
-                self.draw_view(buffer)?;
             }
             Action::MoveViewUpOneLine => {
                 if self.vtop > 0 {
@@ -1059,24 +841,23 @@ impl Editor {
                         self.cursor_y = self.vheight() - 7;
                     }
                 }
-                self.draw_view(buffer)?;
             }
             Action::PageUp => {
                 if self.vtop > 0 {
                     self.vtop = self.vtop.saturating_sub(self.vheight());
-                    self.draw_view(buffer)?;
                 }
             }
             Action::PageDown => {
-                if self.buffer.len() > (self.vtop + self.vheight()) {
+                if self.current_buffer().len() > (self.vtop + self.vheight()) {
                     self.vtop += self.vheight();
-                    self.draw_view(buffer)?;
                 }
             }
             Action::EnterMode(new_mode) => {
-                if !self.is_insert() && matches!(new_mode, Mode::Insert) {
+                debug!("Entering mode: {:?}", new_mode);
+                if self.is_normal() && matches!(new_mode, Mode::Insert) {
                     self.insert_undo_actions = Vec::new();
                 }
+
                 if self.is_insert()
                     && matches!(new_mode, Mode::Normal)
                     && !self.insert_undo_actions.is_empty()
@@ -1085,70 +866,129 @@ impl Editor {
                     self.undoable_actions.push(Action::UndoMultiple(actions));
                 }
 
-                if self.is_command() {
-                    self.draw_command_line(buffer);
-                }
-
                 self.mode = *new_mode;
+
                 self.draw_status_line(buffer);
             }
             Action::InsertCharAtCursor(c) => {
                 self.insert_undo_actions
                     .push(Action::RemoveCharAt(self.cursor_x, self.buffer_line()));
-                self.buffer.insert(self.cursor_x, self.buffer_line(), *c);
+                let line = self.buffer_line();
+                let cursor_x = self.cursor_x;
+
+                crate::log!(
+                    "InsertCharAtCursor - char: '{}' (U+{:04x}), cursor_x: {}, line: {}",
+                    c,
+                    *c as u32,
+                    cursor_x,
+                    line
+                );
+
+                if let Some(line_content) = self.current_buffer().get(line) {
+                    crate::log!("Line content before insert: {:?}", line_content);
+                    crate::log!("Line char count: {}", line_content.chars().count());
+                }
+
+                self.current_buffer_mut().insert(cursor_x, line, *c);
                 self.cursor_x += 1;
-                self.draw_line(buffer);
             }
             Action::RemoveCharAt(x, y) => {
-                self.buffer.remove(*x, *y);
-                self.draw_line(buffer);
+                self.current_buffer_mut().remove(*x, *y);
             }
             Action::DeleteCharAtCursor => {
-                self.buffer.remove(self.cursor_x, self.buffer_line());
-                self.draw_line(buffer);
+                let cursor_x = self.cursor_x;
+                let line = self.buffer_line();
+
+                self.current_buffer_mut().remove(cursor_x, line);
+            }
+            Action::ReplaceLineAt(y, contents) => {
+                self.current_buffer_mut().replace_line(*y, contents);
             }
             Action::InsertNewLine => {
-                self.insert_undo_actions
-                    .push(Action::DeleteLineAt(self.buffer_line() + 1));
-                self.buffer.insert_line(self.buffer_line() + 1, "");
-                self.cursor_x = 0;
+                self.insert_undo_actions.extend(vec![
+                    Action::MoveTo(self.cursor_x, self.buffer_line() + 1),
+                    Action::DeleteLineAt(self.buffer_line() + 1),
+                    Action::ReplaceLineAt(
+                        self.buffer_line(),
+                        self.current_line_contents().unwrap_or_default(),
+                    ),
+                ]);
+                let spaces = self.current_line_indentation();
+
+                let current_line = self.current_line_contents().unwrap_or_default();
+                let current_line = current_line.trim_end();
+                if self.cursor_x > current_line.len() {
+                    self.cursor_x = current_line.len();
+                }
+                let before_cursor = current_line[..self.cursor_x].to_string();
+                let after_cursor = current_line[self.cursor_x..].to_string();
+
+                let line = self.buffer_line();
+                self.current_buffer_mut().replace_line(line, &before_cursor);
+
+                self.cursor_x = spaces;
                 self.cursor_y += 1;
 
-                if self.cursor_y >= self.vheight() - 5 {
+                if self.cursor_y >= self.vheight() {
                     self.vtop += 1;
                     self.cursor_y -= 1;
                 }
 
-                self.render(buffer)?;
+                let new_line = format!("{}{}", " ".repeat(spaces), &after_cursor);
+                let line = self.buffer_line();
+
+                self.current_buffer_mut().insert_line(line, &new_line);
             }
             Action::InsertLineAbove => {
-                self.buffer.insert_line(self.buffer_line(), "");
-                self.cursor_y = self.cursor_y.saturating_sub(1);
-                self.mode = Mode::Insert;
+                self.undoable_actions
+                    .push(Action::DeleteLineAt(self.buffer_line()));
+
+                let leading_spaces = if let Some(line) = self.current_line_contents() {
+                    if line.is_empty() {
+                        self.previous_line_indentation()
+                    } else {
+                        self.current_line_indentation()
+                    }
+                } else {
+                    self.previous_line_indentation()
+                };
+
+                let line = self.buffer_line();
+                self.current_buffer_mut()
+                    .insert_line(line, &" ".repeat(leading_spaces));
+                self.cursor_x = leading_spaces;
             }
             Action::InsertLineBelow => {
                 self.undoable_actions
                     .push(Action::DeleteLineAt(self.buffer_line() + 1));
-                self.buffer.insert_line(self.buffer_line() + 1, "");
+
+                let leading_spaces = self.current_line_indentation();
+                let line = self.buffer_line();
+
+                self.current_buffer_mut()
+                    .insert_line(line + 1, &" ".repeat(leading_spaces));
                 self.cursor_y += 1;
-                self.cursor_x = 0;
-                self.mode = Mode::Insert;
+                self.cursor_x = leading_spaces;
+
+                if self.cursor_y >= self.vheight() {
+                    self.vtop += 1;
+                    self.cursor_y -= 1;
+                }
             }
             Action::InsertLineAt(line, contents) => {
                 self.undoable_actions
                     .push(Action::DeleteLineAt(self.buffer_line()));
                 if let Some(contents) = contents {
-                    self.buffer.insert_line(*line, &contents.to_string());
+                    self.current_buffer_mut().insert_line(*line, contents);
                 }
             }
             Action::DeleteCurrentLine => {
                 let line = self.buffer_line();
                 let contents = self.current_line_contents();
 
-                self.buffer.remove_line(line);
+                self.current_buffer_mut().remove_line(line);
                 self.undoable_actions
                     .push(Action::InsertLineAt(line, contents));
-                self.render(buffer)?;
             }
             Action::DeletePreviousChar => {
                 if self.cursor_x > 0
@@ -1167,10 +1007,8 @@ impl Editor {
                         let line_num = self.buffer_line();
                         let pos_x = self.cursor_x;
                         for _ in 0..chars_to_remove {
-                            self.buffer.remove(pos_x, line_num);
+                            self.current_buffer_mut().remove(pos_x, line_num);
                         }
-
-                        self.draw_line(buffer);
                     }
                 }
             }
@@ -1178,8 +1016,7 @@ impl Editor {
                 self.waiting_key_action = Some(*(key_action.clone()));
             }
             Action::DeleteLineAt(y) => {
-                self.buffer.remove_line(*y);
-                self.render(buffer)?;
+                self.current_buffer_mut().remove_line(*y);
             }
             Action::Command(cmd) => {
                 for action in self.handle_command(cmd) {
@@ -1195,7 +1032,26 @@ impl Editor {
             }
         }
 
+        self.sync_to_window();
+
+        if self.window_manager.windows().len() > 1 {
+            self.render(buffer)?;
+        }
+
         Ok(false)
+    }
+
+    fn previous_line_indentation(&self) -> usize {
+        if self.buffer_line() > 0 {
+            self.current_buffer()
+                .get(self.buffer_line() - 1)
+                .unwrap_or_default()
+                .chars()
+                .position(|c| !c.is_whitespace())
+                .unwrap_or(0)
+        } else {
+            0
+        }
     }
 
     fn current_line_indentation(&self) -> usize {
@@ -1217,7 +1073,7 @@ impl Editor {
             return Ok(());
         }
 
-        if line <= self.buffer.len() {
+        if line <= self.current_buffer().len() {
             let y = line - 1;
 
             if self.is_within_view(y) {
@@ -1225,11 +1081,11 @@ impl Editor {
             } else if self.is_within_first_page(y) {
                 self.vtop = 0;
                 self.cursor_y = y;
-                self.draw_view(buffer)?;
+                self.render(buffer)?;
             } else if self.is_within_last_page(y) {
-                self.vtop = self.buffer.len() - self.vheight();
+                self.vtop = self.current_buffer().len() - self.vheight();
                 self.cursor_y = y - self.vtop;
-                self.draw_view(buffer)?;
+                self.render(buffer)?;
             } else {
                 if matches!(pos, GoToLinePosition::Bottom) {
                     self.vtop = y - self.vheight();
@@ -1242,7 +1098,7 @@ impl Editor {
                     }
                 }
 
-                self.draw_view(buffer)?;
+                self.render(buffer)?;
             }
         }
         Ok(())
@@ -1253,7 +1109,7 @@ impl Editor {
     }
 
     fn is_within_last_page(&self, y: usize) -> bool {
-        y > self.buffer.len() - self.vheight()
+        y > self.current_buffer().len() - self.vheight()
     }
 
     fn is_within_first_page(&self, y: usize) -> bool {
@@ -1286,6 +1142,18 @@ impl Editor {
             _ => None,
         }
     }
+
+    fn fix_cursor_position(&mut self) {
+        let line_len = self.line_length();
+
+        if self.is_normal() && line_len > 0 {
+            if self.cursor_x >= line_len {
+                self.cursor_x = line_len.saturating_sub(1);
+            }
+        } else if self.cursor_x > line_len {
+            self.cursor_x = line_len;
+        }
+    }
 }
 
 impl Editor {
@@ -1311,12 +1179,12 @@ impl Editor {
                         "InsertCharAtCursorPos: char='{}', cx={}, line={}",
                         c, cursor_x, line
                     );
-                    if let Some(line_content) = self.buffer.get(line) {
+                    if let Some(line_content) = self.current_buffer().get(line) {
                         println!("  Line content before: {:?}", line_content);
                     }
                 }
 
-                self.buffer.insert(cursor_x, line, *c);
+                self.current_buffer_mut().insert(cursor_x, line, *c);
                 if self.mode == Mode::Insert {
                     self.cursor_x += 1;
                 }
@@ -1324,7 +1192,7 @@ impl Editor {
                 should_quit = false;
             }
             Action::MoveRight => {
-                let line = self.buffer.get(self.buffer_line());
+                let line = self.current_buffer().get(self.buffer_line());
                 if let Some(line) = line {
                     let line = line.trim_end_matches('\n');
                     let line_len = line.chars().count();
@@ -1341,7 +1209,7 @@ impl Editor {
                 should_quit = false;
             }
             Action::MoveDown => {
-                let buffer_lines = self.buffer.len();
+                let buffer_lines = self.current_buffer().len();
                 let current_line = self.vtop + self.cursor_y;
                 if current_line < buffer_lines {
                     self.cursor_y += 1;
@@ -1367,7 +1235,7 @@ impl Editor {
                 should_quit = false;
             }
             Action::MoveToBottom => {
-                let last_line = self.buffer.len();
+                let last_line = self.current_buffer().len();
                 self.set_cursor_line(last_line);
                 should_quit = false;
             }
@@ -1377,7 +1245,7 @@ impl Editor {
             }
             Action::MoveToLineEnd => {
                 let line = self.buffer_line();
-                if let Some(content) = self.buffer.get(line) {
+                if let Some(content) = self.current_buffer().get(line) {
                     self.cursor_x = content.trim_end_matches('\n').len();
                 }
                 should_quit = false;
@@ -1393,20 +1261,20 @@ impl Editor {
             Action::DeleteCharAtCursor => {
                 let line = self.buffer_line();
                 let cursor_x = self.cursor_x;
-                self.buffer.remove(cursor_x, line);
+                self.current_buffer_mut().remove(cursor_x, line);
                 needs_render = true;
                 should_quit = false;
             }
             Action::DeleteCurrentLine => {
                 let line = self.buffer_line();
-                self.buffer.remove_line(line);
+                self.current_buffer_mut().remove_line(line);
                 self.cursor_x = 0;
                 needs_render = true;
                 should_quit = false;
             }
             Action::InsertLineBelow => {
                 let line = self.buffer_line();
-                self.buffer.insert_line(line + 1, "");
+                self.current_buffer_mut().insert_line(line + 1, "");
                 self.cursor_y += 1;
                 self.cursor_x = 0;
                 self.mode = Mode::Insert;
@@ -1415,7 +1283,7 @@ impl Editor {
             }
             Action::InsertLineAbove => {
                 let line = self.buffer_line();
-                self.buffer.insert_line(line, "");
+                self.current_buffer_mut().insert_line(line, "");
                 self.cursor_x = 0;
                 self.mode = Mode::Insert;
                 needs_render = true;
@@ -1423,12 +1291,12 @@ impl Editor {
             }
             Action::Undo => {
                 let line = self.buffer_line();
-                self.buffer.insert(0, line, 'H');
+                self.current_buffer_mut().insert(0, line, 'H');
                 needs_render = true;
                 should_quit = false;
             }
             Action::Save => {
-                match self.buffer.save() {
+                match self.current_buffer_mut().save() {
                     Ok(_msg) => {
                         needs_render = true;
                     }
@@ -1439,7 +1307,7 @@ impl Editor {
                 should_quit = false;
             }
             Action::SaveAs(path) => {
-                match self.buffer.save_as(path) {
+                match self.current_buffer_mut().save_as(path) {
                     Ok(_msg) => {
                         needs_render = true;
                     }
@@ -1464,7 +1332,7 @@ impl Editor {
                 let after_cursor = current_line[cursor_x..].to_string();
 
                 let line = self.buffer_line();
-                self.buffer.replace_line(line, &before_cursor);
+                self.current_buffer_mut().replace_line(line, &before_cursor);
 
                 self.cursor_x = spaces;
                 self.cursor_y += 1;
@@ -1476,7 +1344,7 @@ impl Editor {
 
                 let new_line = format!("{}{}", " ".repeat(spaces), &after_cursor);
                 let line = self.buffer_line();
-                self.buffer.insert_line(line, &new_line);
+                self.current_buffer_mut().insert_line(line, &new_line);
                 needs_render = true;
                 should_quit = false;
             }
@@ -1488,7 +1356,7 @@ impl Editor {
                 should_quit = false;
             }
             Action::PageDown => {
-                if self.buffer.len() > self.vtop + self.vheight() {
+                if self.current_buffer().len() > self.vtop + self.vheight() {
                     self.vtop += self.vheight();
                     needs_render = true;
                 }
@@ -1507,8 +1375,8 @@ impl Editor {
                 should_quit = false;
             }
             Action::GoToLine(line) => {
-                let target_line = line.saturating_sub(1); // Convert 1-based to 0-based
-                let max_line = self.buffer.len(); // This is already the last valid line index
+                let target_line = line.saturating_sub(1);
+                let max_line = self.current_buffer().len();
                 let target_line = target_line.min(max_line);
                 self.set_cursor_line(target_line);
                 self.cursor_x = 0;
@@ -1545,7 +1413,7 @@ impl Editor {
                             let line_num = self.buffer_line();
                             let cursor_x = self.cursor_x;
                             for _ in 0..chars_to_remove {
-                                self.buffer.remove(cursor_x, line_num);
+                                self.current_buffer_mut().remove(cursor_x, line_num);
                             }
 
                             needs_render = true;
@@ -1555,14 +1423,14 @@ impl Editor {
                     // Join with previous line
                     let prev_line = self.buffer_line() - 1;
                     let current_line = self.buffer_line();
-                    if let Some(prev_content) = self.buffer.get(prev_line) {
+                    if let Some(prev_content) = self.current_buffer().get(prev_line) {
                         let prev_len = prev_content.trim_end_matches('\n').len();
                         let current_content = self.current_line_contents().unwrap_or_default();
                         let joined =
                             format!("{}{}", prev_content.trim_end(), current_content.trim_end());
 
-                        self.buffer.replace_line(prev_line, &joined);
-                        self.buffer.remove_line(current_line);
+                        self.current_buffer_mut().replace_line(prev_line, &joined);
+                        self.current_buffer_mut().remove_line(current_line);
 
                         self.set_cursor_line(prev_line);
                         self.cursor_x = prev_len;
@@ -1611,7 +1479,7 @@ impl Editor {
     #[doc(hidden)]
     #[must_use]
     pub fn test_current_buffer(&self) -> &Buffer {
-        &self.buffer
+        self.current_buffer()
     }
 
     #[doc(hidden)]
@@ -1655,8 +1523,37 @@ fn determine_style_for_position(style_info: &[StyleInfo], pos: usize) -> Option<
         .iter()
         .find(|style_info| style_info.contains(pos))
     {
-        return Some(s.style);
+        return Some(s.style.clone());
     }
 
     None
+}
+
+#[allow(unused)]
+fn adjust_color_brightness(color: Option<Color>, percentage: i32) -> Option<Color> {
+    let color = color?;
+
+    if let Color::Rgb { r, g, b } = color {
+        let adjust = |component: u8| -> u8 {
+            let delta = (255.0 * (percentage as f32 / 100.0)) as i32;
+            let new_component = component as i32 + delta;
+            if new_component > 255 {
+                255
+            } else if new_component < 0 {
+                0
+            } else {
+                new_component as u8
+            }
+        };
+
+        let r = adjust(r);
+        let g = adjust(g);
+        let b = adjust(b);
+
+        let new_color = Color::Rgb { r, g, b };
+
+        Some(new_color)
+    } else {
+        Some(color)
+    }
 }

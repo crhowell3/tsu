@@ -60,6 +60,26 @@ pub fn byte_to_char(line: &str, byte_offset: usize) -> usize {
 }
 
 #[must_use]
+pub fn next_grapheme_boundary(s: &str, byte_offset: usize) -> Option<usize> {
+    let graphemes: Vec<(usize, &str)> = s.grapheme_indices(true).collect();
+
+    for i in 0..graphemes.len() {
+        let (start, _grapheme) = graphemes[i];
+        let end = if i + 1 < graphemes.len() {
+            graphemes[i + 1].0
+        } else {
+            s.len()
+        };
+
+        if byte_offset >= start && byte_offset < end {
+            return Some(end);
+        }
+    }
+
+    None
+}
+
+#[must_use]
 /// Query the byte boundary of the previous grapheme in a given string
 ///
 /// # Arguments
@@ -80,6 +100,34 @@ pub fn prev_grapheme_boundary(s: &str, byte_offset: usize) -> Option<usize> {
     }
 
     None
+}
+
+#[must_use]
+/// Convert a character index to a column index within the view
+///
+/// # Arguments
+/// - `line`: The string of the line containing the character in question
+/// - `char_idx`: The index of the character in the provided line
+///
+/// # Returns
+/// - The column index of the character based on its index within the line
+pub fn char_to_column(line: &str, char_idx: usize) -> usize {
+    line.chars().take(char_idx).map(char_display_width).sum()
+}
+
+#[must_use]
+pub fn column_to_char(line: &str, target_column: usize) -> usize {
+    let mut current_column = 0;
+
+    for (index, c) in line.chars().enumerate() {
+        let char_width = char_display_width(c);
+        if current_column + char_width > target_column {
+            return index;
+        }
+        current_column += char_width;
+    }
+
+    line.chars().count()
 }
 
 #[cfg(test)]

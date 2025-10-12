@@ -28,7 +28,7 @@ struct Args {
     verbose: u8,
     /// File to open
     #[arg()]
-    file: Option<String>,
+    files: Vec<String>,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -65,11 +65,15 @@ async fn main() -> anyhow::Result<()> {
         LOGGER.get_or_init(|| None);
     }
 
-    let buffer;
-    if let Some(filename) = args.file {
-        buffer = Buffer::from_file(Some(filename)).await?;
+    let mut buffers = Vec::new();
+    if args.files.is_empty() {
+        let buffer = Buffer::new(None, String::new());
+        buffers.push(buffer);
     } else {
-        buffer = Buffer::new(None, String::new());
+        for file in args.files {
+            let buffer = Buffer::from_file(Some(file)).await?;
+            buffers.push(buffer);
+        }
     }
 
     let theme_file = &Config::path("themes").join(&config.theme);
@@ -79,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
     }
     let theme = parse_vscode_theme(&theme_file.to_string_lossy())?;
 
-    let mut editor = Editor::new(config, theme, buffer)?;
+    let mut editor = Editor::new(config, theme, buffers)?;
 
     panic::set_hook(Box::new(|info| {
         _ = stdout().execute(terminal::LeaveAlternateScreen);

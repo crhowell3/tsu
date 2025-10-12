@@ -5,7 +5,7 @@ mod vscode;
 use serde::{Deserialize, Serialize};
 pub use vscode::parse_vscode_theme;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Theme {
     #[allow(dead_code)]
     pub name: String,
@@ -21,7 +21,7 @@ impl Theme {
     pub fn get_style(&self, scope: &str) -> Option<Style> {
         self.token_styles.iter().find_map(|token_style| {
             if token_style.scope.contains(&scope.to_string()) {
-                Some(token_style.style)
+                Some(token_style.style.clone())
             } else {
                 None
             }
@@ -78,7 +78,7 @@ pub struct StatusLineStyle {
     pub inner_style: Style,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Style {
     pub foreground: Option<Color>,
     pub background: Option<Color>,

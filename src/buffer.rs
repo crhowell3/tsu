@@ -2,6 +2,8 @@ use std::path::Path;
 
 use ropey::Rope;
 
+use crate::unicode::column_to_char;
+
 #[derive(Debug)]
 /// The internal representation of an opened file
 ///
@@ -17,6 +19,8 @@ pub struct Buffer {
     content: Rope,
     /// State flag for keeping track of unsaved (dirty) changes
     pub dirty: bool,
+    pub position: (usize, usize),
+    pub vtop: usize,
 }
 
 impl Buffer {
@@ -50,6 +54,8 @@ impl Buffer {
             file,
             content: Rope::from_str(&contents),
             dirty: false,
+            position: (0, 0),
+            vtop: 0,
         }
     }
 
@@ -121,10 +127,11 @@ impl Buffer {
     ///
     /// # Errors
     /// Can return an `IoError` if it fails to write the contents to the provided file
-    pub fn save(&self) -> anyhow::Result<String> {
+    pub fn save(&mut self) -> anyhow::Result<String> {
         if let Some(file) = &self.file {
             let contents = self.contents();
             std::fs::write(file, &contents)?;
+            self.dirty = false;
             let message = format!("{:?} {}L, {}B written", file, self.len(), contents.len());
             Ok(message)
         } else {
@@ -154,6 +161,16 @@ impl Buffer {
             contents.len()
         );
         Ok(message)
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.file.as_deref().unwrap_or("[No name]")
+    }
+
+    #[must_use]
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 
     #[must_use]
@@ -187,7 +204,7 @@ impl Buffer {
     /// # Returns
     /// - True if the buffer is empty, false otherwise
     pub fn is_empty(&self) -> bool {
-        self.content.len_lines() == 0
+        self.content.len_bytes() == 0
     }
 
     /// Put a character at a coordinate position within the buffer
@@ -200,7 +217,14 @@ impl Buffer {
         let char_idx = self.position_to_char_idx(x, y);
         let total_chars = self.content.len_chars();
 
+        crate::debug!(
+            "Buffer::insert - x: {x}, y: {y}, char: '{c}', char_idx: {char_idx}, total_chars: {total_chars}"
+        );
+
         if char_idx > total_chars {
+            crate::error!(
+                "char_idx {char_idx} exceeds total_chars {total_chars}! Clamping to end."
+            );
             self.content.insert_char(total_chars, c);
         } else {
             self.content.insert_char(char_idx, c);
@@ -323,6 +347,16 @@ impl Buffer {
         let x = x.min(line_chars_no_newline);
 
         line_start_char + x
+    }
+
+    #[must_use]
+    pub fn column_to_char_index(&self, column: usize, y: usize) -> usize {
+        if let Some(line) = self.get(y) {
+            let line = line.trim_end_matches('\n');
+            column_to_char(line, column)
+        } else {
+            0
+        }
     }
 }
 

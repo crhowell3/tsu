@@ -8,6 +8,8 @@ pub mod highlighter;
 pub mod logger;
 pub mod theme;
 pub mod unicode;
+pub mod window;
+pub mod window_manager;
 
 #[doc(hidden)]
 pub mod ext;
@@ -26,6 +28,54 @@ macro_rules! log {
             let log_message = format!($($arg)*);
             if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
                 logger.log(&log_message);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.debug(&log_message);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! info {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.info(&log_message);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.warn(&log_message);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)*) => {
+        {
+            let log_message = format!($($arg)*);
+            if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
+                logger.error(&log_message);
             }
         }
     };
