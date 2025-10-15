@@ -18,6 +18,8 @@ use once_cell::sync::OnceCell;
 
 pub use logger::Logger;
 
+pub const VERSION_AND_GIT_HASH: &str = env!("VERSION_AND_GIT_HASH");
+
 /// Logger singleton
 pub static LOGGER: OnceCell<Option<Logger>> = OnceCell::new();
 

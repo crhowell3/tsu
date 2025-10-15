@@ -6,12 +6,12 @@ use tsu::buffer::Buffer;
 use tsu::config::Config;
 use tsu::editor::Editor;
 use tsu::theme::parse_vscode_theme;
-use tsu::{LOGGER, Logger};
+use tsu::{LOGGER, Logger, VERSION_AND_GIT_HASH};
 
 #[derive(Parser, Debug)]
 #[clap(name = "tsu")]
 #[command(
-    version,
+    version = VERSION_AND_GIT_HASH,
     about = "A vimlike modal text editor.",
     author = "Cameron Howell <me@crhowell.com>",
     display_name = "tsu ツ",
