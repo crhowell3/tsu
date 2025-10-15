@@ -676,7 +676,7 @@ impl Editor {
             let window_cursor_x = window.cursor_x;
             let window_cursor_y = window.cursor_y;
 
-            let display_column = if let Some(line) = self.view_line(window.vtop + window_cursor_y) {
+            let display_column = if let Some(line) = self.view_line(window_cursor_y) {
                 let line = line.trim_end_matches('\n');
                 crate::unicode::char_to_column(line, window_cursor_x)
             } else {
