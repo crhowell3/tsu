@@ -1,3 +1,5 @@
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -122,12 +124,12 @@ pub fn blend_color(foreground: Color, background: Color) -> Color {
                 b: background_b,
             },
         ) => {
-            let alpha = a as f32 / 255.0;
+            let alpha = f32::from(a) / 255.0;
             let inv_alpha = 1.0 - alpha;
 
-            let r = (r as f32 * alpha + background_r as f32 * inv_alpha) as u8;
-            let g = (g as f32 * alpha + background_g as f32 * inv_alpha) as u8;
-            let b = (b as f32 * alpha + background_b as f32 * inv_alpha) as u8;
+            let r = (f32::from(r) * alpha + f32::from(background_r) * inv_alpha) as u8;
+            let g = (f32::from(g) * alpha + f32::from(background_g) * inv_alpha) as u8;
+            let b = (f32::from(b) * alpha + f32::from(background_b) * inv_alpha) as u8;
 
             Color::Rgb { r, g, b }
         }

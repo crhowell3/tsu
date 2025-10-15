@@ -1,3 +1,7 @@
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
+
 use crate::{editor::Point, window::Window};
 
 #[derive(Debug, Clone)]

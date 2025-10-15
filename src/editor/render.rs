@@ -17,6 +17,13 @@ use crate::{
 use super::{Editor, render_buffer::RenderBuffer};
 
 impl Editor {
+    /// The main render function for updating the terminal
+    ///
+    /// # Arguments
+    /// - `buffer`: The buffer to render
+    ///
+    /// # Errors
+    /// Can return an `IoError`
     pub fn render(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
         self.update_gutter_width();
         let current_buffer = buffer.clone();
@@ -27,11 +34,11 @@ impl Editor {
             self.render_window(buffer, window_id)?;
         }
 
-        self.render_window_separators(buffer)?;
+        self.render_window_separators(buffer);
 
-        self.render_decorations(buffer)?;
+        self.render_decorations(buffer);
 
-        self.update_and_render_overlays(buffer)?;
+        self.update_and_render_overlays(buffer);
 
         let diff = buffer.diff(&current_buffer);
         self.render_diff(diff)?;
@@ -50,10 +57,10 @@ impl Editor {
         };
 
         if let Some((window, window_count)) = window_data {
-            self.render_gutter_in_window(buffer, &window)?;
+            self.render_gutter_in_window(buffer, &window);
             self.render_main_content_in_window(buffer, &window)?;
             if window_id < window_count - 1 {
-                self.render_window_separator(buffer, &window)?;
+                self.render_window_separator(buffer, &window);
             }
         }
 
@@ -64,7 +71,7 @@ impl Editor {
         &mut self,
         buffer: &mut RenderBuffer,
         window: &crate::window::Window,
-    ) -> anyhow::Result<()> {
+    ) {
         let separator_style = Style {
             foreground: Some(Color::Rgb {
                 r: 100,
@@ -83,12 +90,10 @@ impl Editor {
                 buffer.set_char(x, terminal_y, '|', &separator_style, &self.theme);
             }
         }
-
-        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
-    fn render_window_separators(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
+    fn render_window_separators(&mut self, buffer: &mut RenderBuffer) {
         let separator_style = Style {
             foreground: Some(Color::Rgb {
                 r: 100,
@@ -104,7 +109,7 @@ impl Editor {
 
         let windows = self.window_manager.windows();
         if windows.len() <= 1 {
-            return Ok(());
+            return;
         }
 
         let use_ascii = self.config.window_borders_ascii;
@@ -121,11 +126,11 @@ impl Editor {
                     continue;
                 }
 
-                let window1 = windows[i];
-                let window2 = windows[j];
+                let first_window = windows[i];
+                let second_window = windows[j];
 
-                if window1.position.x + window1.size.0 + 1 == window2.position.x {
-                    let x = window1.position.x + window1.size.0;
+                if first_window.position.x + first_window.size.0 + 1 == second_window.position.x {
+                    let x = first_window.position.x + first_window.size.0;
                     vertical_x_positions.insert(x);
                 }
             }
@@ -157,11 +162,11 @@ impl Editor {
                 if i == j {
                     continue;
                 }
-                let window1 = windows[i];
-                let window2 = windows[j];
+                let first_window = windows[i];
+                let second_window = windows[j];
 
-                if window1.position.y + window1.size.1 + 1 == window2.position.y {
-                    let y = window1.position.y + window1.size.1;
+                if first_window.position.y + first_window.size.1 + 1 == second_window.position.y {
+                    let y = first_window.position.y + first_window.size.1;
                     horizontal_y_positions.insert(y);
                 }
             }
@@ -296,16 +301,23 @@ impl Editor {
         for ((x, y), char) in final_grid {
             buffer.set_char(x, y, char, &separator_style, &self.theme);
         }
-
-        Ok(())
     }
 
-    fn render_decorations(&mut self, buffer: &mut RenderBuffer) -> anyhow::Result<()> {
+    fn render_decorations(&mut self, buffer: &mut RenderBuffer) {
         self.draw_status_line(buffer);
         self.draw_command_line(buffer);
-        Ok(())
     }
 
+    /// Renders new changes to the terminal
+    ///
+    /// # Arguments
+    /// - `change_set`: A vector of changes to render
+    ///
+    /// # Errors
+    /// Can return an `IoError`
+    ///
+    /// # Panics
+    /// This function will panic if `draw_cursor` panics
     pub fn render_diff(&mut self, change_set: Vec<Change<'_>>) -> anyhow::Result<()> {
         self.stdout.queue(cursor::Hide)?;
 
@@ -380,7 +392,7 @@ impl Editor {
         &mut self,
         buffer: &mut RenderBuffer,
         window: &crate::window::Window,
-    ) -> anyhow::Result<()> {
+    ) {
         let width = self.gutter_width();
         let gutter_style = self
             .theme
@@ -392,7 +404,7 @@ impl Editor {
         for y in 0..window.inner_height() {
             let line_number = y + 1 + window.vtop;
             let text = if line_number <= window_buffer.len() {
-                format!("{:>width$} ", line_number)
+                format!("{line_number:>width$} ")
             } else {
                 " ".repeat(width + 1)
             };
@@ -401,16 +413,13 @@ impl Editor {
             let terminal_y = window.position.y + y;
             buffer.set_text(terminal_x, terminal_y, &text, &gutter_style);
         }
-
-        Ok(())
     }
 
-    fn update_and_render_overlays(&mut self, _buffer: &mut RenderBuffer) -> anyhow::Result<()> {
+    fn update_and_render_overlays(&mut self, _buffer: &mut RenderBuffer) {
         let _cursor_position = Some(Point::new(
             self.cursor_x + self.gutter_width() + 1,
             self.cursor_y,
         ));
-        Ok(())
     }
 
     fn render_main_content_in_window(
