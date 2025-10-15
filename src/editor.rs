@@ -1,3 +1,7 @@
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+
 pub mod render;
 pub mod render_buffer;
 
@@ -288,7 +292,7 @@ impl Editor {
         self.buffers
             .iter()
             .filter(|b| b.is_dirty())
-            .map(|b| b.name())
+            .map(super::buffer::Buffer::name)
             .collect()
     }
 
@@ -392,7 +396,7 @@ impl Editor {
                                 continue;
                             }
 
-                            if let Some(action) = self.handle_event(&ev)?
+                            if let Some(action) = self.handle_event(&ev)
                                 && self.handle_key_action(&ev, &action, &mut buffer).await? {
                                     break;
                                 }
@@ -456,19 +460,19 @@ impl Editor {
         Ok(quit)
     }
 
-    fn handle_event(&mut self, ev: &event::Event) -> anyhow::Result<Option<KeyAction>> {
+    fn handle_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
         if let Some(key_action) = self.waiting_key_action.take() {
             self.waiting_command = None;
-            return Ok(self.handle_waiting_command(key_action, ev));
+            return self.handle_waiting_command(key_action, ev);
         }
 
-        Ok(match self.mode {
+        match self.mode {
             Mode::Normal => self.handle_normal_event(ev),
             Mode::Insert => self.handle_insert_event(ev),
             Mode::Command => self.handle_command_event(ev),
             Mode::Visual => self.handle_visual_event(ev),
             Mode::Replace => self.handle_replace_event(ev),
-        })
+        }
     }
 
     fn handle_command(&mut self, cmd: &str) -> Vec<Action> {
@@ -1550,7 +1554,7 @@ fn adjust_color_brightness(color: Option<Color>, percentage: i32) -> Option<Colo
     if let Color::Rgb { r, g, b } = color {
         let adjust = |component: u8| -> u8 {
             let delta = (255.0 * (percentage as f32 / 100.0)) as i32;
-            let new_component = component as i32 + delta;
+            let new_component = i32::from(component) + delta;
             if new_component > 255 {
                 255
             } else if new_component < 0 {
