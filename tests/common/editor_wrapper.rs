@@ -1,4 +1,4 @@
-use tsu::{
+use tsu_editor::{
     action::Action,
     buffer::Buffer,
     config::Config,

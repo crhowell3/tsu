@@ -1,7 +1,7 @@
 mod common;
 
-use tsu::action::Action;
-use tsu::editor::Mode;
+use tsu_editor::action::Action;
+use tsu_editor::editor::Mode;
 
 use crate::common::EditorWrapper;
 

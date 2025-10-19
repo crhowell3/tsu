@@ -36,7 +36,7 @@ impl Buffer {
     /// # Examples
     ///
     /// ```
-    /// use tsu::buffer::Buffer;
+    /// use tsu_editor::buffer::Buffer;
     ///
     /// let file = Some("some_file.rs".to_string());
     /// let contents = "";
@@ -70,7 +70,7 @@ impl Buffer {
     /// # Examples
     ///
     /// ```
-    /// use tsu::buffer::Buffer;
+    /// use tsu_editor::buffer::Buffer;
     ///
     /// # use std::fs::{self, File};
     /// # use std::io::Write;
