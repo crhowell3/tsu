@@ -2,6 +2,7 @@
 name = "tsu-editor"
 version = "0.2.0"
 authors = ["Cameron Howell <me@crhowell.com>"]
+description = "A modal text editor written in Rust"
 edition = "2024"
 license = "GPL-3.0"
 readme = "README.md"
