@@ -2,11 +2,11 @@ use clap::Parser;
 use crossterm::{ExecutableCommand, terminal};
 use std::{env, io::stdout, panic};
 
-use tsu::buffer::Buffer;
-use tsu::config::Config;
-use tsu::editor::Editor;
-use tsu::theme::parse_vscode_theme;
-use tsu::{LOGGER, Logger, VERSION_AND_GIT_HASH};
+use tsu_editor::buffer::Buffer;
+use tsu_editor::config::Config;
+use tsu_editor::editor::Editor;
+use tsu_editor::theme::parse_vscode_theme;
+use tsu_editor::{LOGGER, Logger, VERSION_AND_GIT_HASH};
 
 #[derive(Parser, Debug)]
 #[clap(name = "tsu")]

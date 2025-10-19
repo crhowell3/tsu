@@ -1021,8 +1021,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "tsu"
-version = "0.1.1"
+name = "tsu-editor"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-recursion",
