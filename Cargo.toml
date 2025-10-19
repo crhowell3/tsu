@@ -1,16 +1,20 @@
 [package]
-name = "tsu"
-version = "0.1.1"
+name = "tsu-editor"
+version = "0.2.0"
 authors = ["Cameron Howell <me@crhowell.com>"]
 edition = "2024"
 license = "GPL-3.0"
 readme = "README.md"
 repository = "https://github.com/crhowell3/tsu"
 keywords = ["modal", "editor", "vimlike"]
-publish = false
+publish = true
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[[bin]]
+name = "tsu"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.99"
