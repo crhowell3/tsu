@@ -1,8 +1,10 @@
 use crate::color::Color;
 
+mod toml;
 mod vscode;
 
 use serde::{Deserialize, Serialize};
+pub use toml::parse_toml_theme;
 pub use vscode::parse_vscode_theme;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
