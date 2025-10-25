@@ -24,11 +24,11 @@ use crate::{
     config::{Config, KeyAction},
     debug,
     editor::render_buffer::RenderBuffer,
+    graphics::Style,
     highlighter::Highlighter,
     log,
-    theme::{Style, Theme},
-    unicode,
-    unicode::{byte_to_char, char_to_byte, next_grapheme_boundary, prev_grapheme_boundary},
+    theme::Theme,
+    unicode::{self, byte_to_char, char_to_byte, next_grapheme_boundary, prev_grapheme_boundary},
     window_manager::WindowManager,
 };
 

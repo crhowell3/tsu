@@ -4,6 +4,7 @@ pub mod color;
 pub mod command;
 pub mod config;
 pub mod editor;
+pub mod graphics;
 pub mod highlighter;
 pub mod logger;
 pub mod theme;
@@ -79,6 +80,24 @@ macro_rules! error {
             if let Some(logger) = $crate::LOGGER.get_or_init(|| Some($crate::Logger::new("tsu.log"))) {
                 logger.error(&log_message);
             }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! hashmap {
+    (@single $($x:tt)*) => (());
+    (@count $($rest:expr),*) => (<[()]>::len(&[$(hashmap!(@single $rest)),*]));
+
+    ($($key:expr => $value:expr,)+) => { hashmap!($($key => $value),+) };
+    ($($key:expr => $value:expr),*) => {
+        {
+            let _cap = hashmap!(@count $($key),*);
+            let mut _map = ::std::collections::HashMap::with_capacity(_cap);
+            $(
+                let _ = _map.insert($key, $value);
+            )*
+            _map
         }
     };
 }

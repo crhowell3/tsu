@@ -72,24 +72,26 @@ impl fmt::Display for Color {
 /// # Errors
 /// Can return a `ParseIntError` if it fails to convert any of the color channel strings into a
 /// base 16 number
-pub fn parse_rgb(s: &str) -> anyhow::Result<Color> {
+pub fn parse_rgb(s: &str) -> Result<Color, String> {
     if !s.starts_with('#') {
-        anyhow::bail!("Invalid hex string: {s}");
+        return Err(format!("Invalid hex string: {s}"));
     }
 
     let hex = s.trim_start_matches('#');
     let len = hex.len();
 
     if len != 6 && len != 8 {
-        anyhow::bail!("Hex string must be in the format #RRGGBB or #RRGGBBAA instead of {s}");
+        return Err(format!(
+            "Hex string must be in the format #RRGGBB or #RRGGBBAA instead of {s}"
+        ));
     }
 
-    let red = u8::from_str_radix(&hex[0..2], 16)?;
-    let green = u8::from_str_radix(&hex[2..4], 16)?;
-    let blue = u8::from_str_radix(&hex[4..6], 16)?;
+    let red = u8::from_str_radix(&hex[0..2], 16).unwrap_or_default();
+    let green = u8::from_str_radix(&hex[2..4], 16).unwrap_or_default();
+    let blue = u8::from_str_radix(&hex[4..6], 16).unwrap_or_default();
 
     if len == 8 {
-        let alpha = u8::from_str_radix(&hex[6..8], 16)?;
+        let alpha = u8::from_str_radix(&hex[6..8], 16).unwrap_or_default();
         Ok(Color::Rgba {
             r: red,
             g: green,

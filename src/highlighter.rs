@@ -71,11 +71,9 @@ impl Highlighter {
                 let start = node.start_byte();
                 let end = node.end_byte();
                 let scope = self.query.capture_names()[cap.index as usize];
-                let style = self.theme.get_style(scope);
+                let style = self.theme.get(scope);
 
-                if let Some(style) = style {
-                    colors.push(StyleInfo { start, end, style });
-                }
+                colors.push(StyleInfo { start, end, style });
             }
         }
 
