@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, string};
 
 use toml::{Value, map::Map};
 
 use crate::{
     color::{Color, parse_rgb},
-    graphics::{Style, UnderlineStyle},
+    graphics::{Modifier, Style, UnderlineStyle},
     hashmap,
 };
 
@@ -149,6 +149,30 @@ impl ThemePalette {
         value
             .as_str()
             .ok_or(format!("Unrecognized value: {}", value))
+    }
+
+    pub fn parse_color(&self, value: Value) -> Result<Color, String> {
+        let value = Self::parse_value_as_str(&value)?;
+
+        self.palette
+            .get(value)
+            .copied()
+            .ok_or("")
+            .or_else(|_| parse_rgb(value))
+    }
+
+    pub fn parse_modifier(value: &Value) -> Result<Modifier, String> {
+        value
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .ok_or(format!("Invalid modifier: {value}"))
+    }
+
+    pub fn parse_underline_style(value: &Value) -> Result<UnderlineStyle, String> {
+        value
+            .as_str()
+            .and_then(|s| s.parse().ok())
+            .ok_or(format!("Invalid underline style: {value}"))
     }
 
     pub fn parse_style(&self, style: &mut Style, value: Value) -> Result<(), String> {

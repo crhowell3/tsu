@@ -10,7 +10,7 @@ use crate::{
     color::{Color, blend_color},
     debug,
     editor::{Mode, Point, determine_style_for_position, render_buffer::Change},
-    theme::Style,
+    graphics::Style,
     unicode::char_display_width,
 };
 
@@ -73,12 +73,12 @@ impl Editor {
         window: &crate::window::Window,
     ) {
         let separator_style = Style {
-            foreground: Some(Color::Rgb {
+            fg: Some(Color::Rgb {
                 r: 100,
                 g: 100,
                 b: 100,
             }),
-            background: None,
+            bg: None,
             bold: false,
             italic: false,
         };
@@ -95,12 +95,12 @@ impl Editor {
     #[allow(clippy::too_many_lines)]
     fn render_window_separators(&mut self, buffer: &mut RenderBuffer) {
         let separator_style = Style {
-            foreground: Some(Color::Rgb {
+            fg: Some(Color::Rgb {
                 r: 100,
                 g: 100,
                 b: 100,
             }),
-            background: None,
+            bg: None,
             bold: false,
             italic: false,
         };
@@ -397,7 +397,7 @@ impl Editor {
         let gutter_style = self
             .theme
             .gutter_style
-            .fallback_background(&self.theme.style);
+            .fallback_background(&self.theme.styles);
 
         let window_buffer = &self.buffers[window.buffer_index];
 

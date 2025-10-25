@@ -128,7 +128,7 @@ impl RenderBuffer {
                     .background
                     .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
             ),
-            Color::Rgb { .. } => color,
+            _ => color,
         });
 
         self.cells[position] = Cell {
