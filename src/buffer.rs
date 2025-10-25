@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use ropey::Rope;
 
 use crate::unicode::column_to_char;
@@ -93,12 +91,7 @@ impl Buffer {
     pub async fn from_file(file: Option<String>) -> anyhow::Result<Self> {
         match &file {
             Some(file) => {
-                let path = Path::new(file);
-                if !path.exists() {
-                    return Err(anyhow::anyhow!("file {file} not found"));
-                }
-
-                let contents = std::fs::read_to_string(file)?;
+                let contents = std::fs::read_to_string(file).unwrap_or_default();
 
                 if contents
                     .chars()
