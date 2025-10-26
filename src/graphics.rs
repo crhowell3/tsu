@@ -77,6 +77,7 @@ impl Default for Style {
 }
 
 impl Style {
+    #[must_use]
     pub const fn new() -> Self {
         Style {
             fg: None,
@@ -88,6 +89,7 @@ impl Style {
         }
     }
 
+    #[must_use]
     pub const fn reset() -> Self {
         Self {
             fg: Some(Color::Reset),
@@ -99,38 +101,45 @@ impl Style {
         }
     }
 
+    #[must_use]
     pub const fn fg(mut self, color: Color) -> Style {
         self.fg = Some(color);
         self
     }
 
+    #[must_use]
     pub const fn bg(mut self, color: Color) -> Style {
         self.bg = Some(color);
         self
     }
 
+    #[must_use]
     pub const fn underline_color(mut self, color: Color) -> Style {
         self.underline_color = Some(color);
         self
     }
 
+    #[must_use]
     pub const fn underline_style(mut self, style: UnderlineStyle) -> Style {
         self.underline_style = Some(style);
         self
     }
 
+    #[must_use]
     pub fn add_modifier(mut self, modifier: Modifier) -> Style {
         self.sub_modifier.remove(modifier);
         self.add_modifier.insert(modifier);
         self
     }
 
+    #[must_use]
     pub fn remove_modifier(mut self, modifier: Modifier) -> Style {
         self.add_modifier.remove(modifier);
         self.sub_modifier.insert(modifier);
         self
     }
 
+    #[must_use]
     pub fn patch(mut self, other: Style) -> Style {
         self.fg = other.fg.or(self.fg);
         self.bg = other.bg.or(self.bg);

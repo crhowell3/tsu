@@ -33,6 +33,7 @@ pub static BASE16_DEFAULT_THEME: Lazy<Theme> = Lazy::new(|| Theme {
     ..Theme::from(BASE16_DEFAULT_THEME_DATA.clone())
 });
 
+#[must_use]
 pub fn merge_toml_values(left: toml::Value, right: toml::Value, merge_depth: usize) -> toml::Value {
     use toml::Value;
 
@@ -90,12 +91,23 @@ pub struct ThemeLoader {
 }
 
 impl ThemeLoader {
+    #[must_use]
     pub fn new(dirs: &[PathBuf]) -> Self {
         Self {
             theme_dirs: dirs.iter().map(|p| p.join("themes")).collect(),
         }
     }
 
+    /// Attempts to load a theme from a name string
+    ///
+    /// # Arguments
+    /// - `name`: A string literal representing the name of the theme
+    ///
+    /// # Returns
+    /// - If successful, a `Theme` generated with the data provided in the theme's TOML file
+    ///
+    /// # Errors
+    /// - May return an `IOError` if unable to find or open a corresponding file
     pub fn load(&self, name: &str) -> anyhow::Result<Theme> {
         let (theme, warnings) = self.load_with_warnings(name)?;
 
@@ -106,6 +118,16 @@ impl ThemeLoader {
         Ok(theme)
     }
 
+    /// Attempts to load a theme from a name string, returning possible warnings
+    ///
+    /// # Arguments
+    /// - `name`: A string literal representing the name of the theme
+    ///
+    /// # Returns
+    /// - If successful, a `Theme` generated with the data provided in the theme's TOML file
+    ///
+    /// # Errors
+    /// - May return an `IOError` if unable to find or open a corresponding file
     pub fn load_with_warnings(&self, name: &str) -> anyhow::Result<(Theme, Vec<String>)> {
         if name == "default" {
             return Ok((self.default(), Vec::new()));
@@ -134,7 +156,7 @@ impl ThemeLoader {
     ) -> anyhow::Result<Value> {
         let path = self.path(name, visited_paths)?;
 
-        let theme_toml = self.load_toml(path)?;
+        let theme_toml = ThemeLoader::load_toml(path)?;
 
         let inherits = theme_toml.get("inherits");
 
@@ -149,7 +171,7 @@ impl ThemeLoader {
                 _ => self.load_theme(parent_theme_name, visited_paths)?,
             };
 
-            self.merge_themes(parent_theme_toml, theme_toml)
+            ThemeLoader::merge_themes(parent_theme_toml, theme_toml)
         } else {
             theme_toml
         };
@@ -157,7 +179,7 @@ impl ThemeLoader {
         Ok(theme_toml)
     }
 
-    fn merge_themes(&self, parent_theme_toml: Value, theme_toml: Value) -> Value {
+    fn merge_themes(parent_theme_toml: Value, theme_toml: Value) -> Value {
         let parent_palette = parent_theme_toml.get("palette");
         let palette = theme_toml.get("palette");
 
@@ -177,7 +199,7 @@ impl ThemeLoader {
         merge_toml_values(theme, palette.into(), 1)
     }
 
-    fn load_toml(&self, path: PathBuf) -> anyhow::Result<Value> {
+    fn load_toml(path: PathBuf) -> anyhow::Result<Value> {
         let data = std::fs::read_to_string(path)?;
         let value = toml::from_str(&data)?;
 
@@ -185,9 +207,9 @@ impl ThemeLoader {
     }
 
     fn path(&self, name: &str, visited_paths: &mut HashSet<PathBuf>) -> anyhow::Result<PathBuf> {
-        let filename = format!("{}.toml", name);
+        let filename = format!("{name}.toml");
 
-        let mut cycle_found = false; // track if there was a path, but it was in a cycle
+        let mut cycle_found = false;
         self.theme_dirs
             .iter()
             .find_map(|dir| {
@@ -195,7 +217,6 @@ impl ThemeLoader {
                 if !path.exists() {
                     None
                 } else if visited_paths.contains(&path) {
-                    // Avoiding cycle, continuing to look in lower priority directories
                     cycle_found = true;
                     None
                 } else {
@@ -205,13 +226,14 @@ impl ThemeLoader {
             })
             .ok_or_else(|| {
                 if cycle_found {
-                    anyhow::anyhow!("Cycle found in inheriting: {}", name)
+                    anyhow::anyhow!("Cycle found in inheriting: {name}")
                 } else {
-                    anyhow::anyhow!("File not found for: {}", name)
+                    anyhow::anyhow!("File not found for: {name}")
                 }
             })
     }
 
+    #[must_use]
     pub fn default_theme(&self, true_color: bool) -> Theme {
         if true_color {
             self.default()
@@ -289,19 +311,23 @@ fn build_theme_values(
 }
 
 impl Theme {
+    #[must_use]
     #[inline]
     pub fn scope(&self, highlight: Highlight) -> &str {
         &self.scopes[highlight.idx()]
     }
 
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    #[must_use]
     pub fn get(&self, scope: &str) -> Style {
         self.try_get(scope).unwrap_or_default()
     }
 
+    #[must_use]
     pub fn try_get(&self, scope: &str) -> Option<Style> {
         std::iter::successors(Some(scope), |s| Some(s.rsplit_once(',')?.0))
             .find_map(|s| self.styles.get(s).copied())
@@ -369,13 +395,11 @@ impl ThemePalette {
     }
 
     fn parse_value_as_str(value: &Value) -> Result<&str, String> {
-        value
-            .as_str()
-            .ok_or(format!("Unrecognized value: {}", value))
+        value.as_str().ok_or(format!("Unrecognized value: {value}"))
     }
 
-    pub fn parse_color(&self, value: Value) -> Result<Color, String> {
-        let value = Self::parse_value_as_str(&value)?;
+    pub fn parse_color(&self, value: &Value) -> Result<Color, String> {
+        let value = Self::parse_value_as_str(value)?;
 
         self.palette
             .get(value)
@@ -402,12 +426,12 @@ impl ThemePalette {
         if let Value::Table(entries) = value {
             for (name, mut value) in entries {
                 match name.as_str() {
-                    "fg" => *style = style.fg(self.parse_color(value)?),
-                    "bg" => *style = style.bg(self.parse_color(value)?),
+                    "fg" => *style = style.fg(self.parse_color(&value)?),
+                    "bg" => *style = style.bg(self.parse_color(&value)?),
                     "underline" => {
                         let table = value.as_table_mut().ok_or("Underline must be table")?;
                         if let Some(value) = table.remove("color") {
-                            *style = style.underline_color(self.parse_color(value)?);
+                            *style = style.underline_color(self.parse_color(&value)?);
                         }
                         if let Some(value) = table.remove("style") {
                             *style = style.underline_style(Self::parse_underline_style(&value)?);
@@ -428,17 +452,17 @@ impl ThemePalette {
                             }
                         }
                     }
-                    _ => return Err(format!("Invalid style attribute: {}", name)),
+                    _ => return Err(format!("Invalid style attribute: {name}")),
                 }
             }
         } else {
-            *style = style.fg(self.parse_color(value)?);
+            *style = style.fg(self.parse_color(&value)?);
         }
         Ok(())
     }
 
     #[allow(dead_code)]
-    fn parse_style_array(&self, value: Value) -> Result<Vec<Style>, String> {
+    fn parse_style_array(&self, value: &Value) -> Result<Vec<Style>, String> {
         let mut styles = Vec::new();
 
         for v in value
@@ -458,9 +482,8 @@ impl TryFrom<Value> for ThemePalette {
     type Error = String;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let map = match value {
-            Value::Table(entries) => entries,
-            _ => return Ok(Self::default()),
+        let Value::Table(map) = value else {
+            return Ok(Self::default());
         };
 
         let mut palette = HashMap::with_capacity(map.len());
