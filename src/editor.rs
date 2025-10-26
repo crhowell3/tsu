@@ -1533,7 +1533,7 @@ fn determine_style_for_position(style_info: &[StyleInfo], pos: usize) -> Option<
         .iter()
         .find(|style_info| style_info.contains(pos))
     {
-        return Some(s.style.clone());
+        return Some(s.style);
     }
 
     None

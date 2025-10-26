@@ -40,7 +40,7 @@ impl RenderBuffer {
         let cells = vec![
             Cell {
                 c: ' ',
-                style: default_style.clone(),
+                style: *default_style,
             };
             width * height
         ];
@@ -73,15 +73,12 @@ impl RenderBuffer {
 
         for line in contents {
             for c in line.chars() {
-                cells.push(Cell {
-                    c,
-                    style: style.clone(),
-                });
+                cells.push(Cell { c, style: *style });
             }
             for _ in 0..width.saturating_sub(line.len()) {
                 cells.push(Cell {
                     c: ' ',
-                    style: style.clone(),
+                    style: *style,
                 });
             }
         }
@@ -155,10 +152,7 @@ impl RenderBuffer {
             if pos + i >= self.cells.len() {
                 break;
             }
-            self.cells[pos + i] = Cell {
-                c,
-                style: style.clone(),
-            }
+            self.cells[pos + i] = Cell { c, style: *style }
         }
     }
 

@@ -437,6 +437,7 @@ impl ThemePalette {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn parse_style_array(&self, value: Value) -> Result<Vec<Style>, String> {
         let mut styles = Vec::new();
 

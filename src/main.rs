@@ -1,7 +1,7 @@
 use clap::Parser;
 use crossterm::{ExecutableCommand, terminal};
 use std::{env, io::stdout, panic};
-use tsu_editor::theme::{Theme, ThemeLoader};
+use tsu_editor::theme::ThemeLoader;
 
 use tsu_editor::buffer::Buffer;
 use tsu_editor::config::Config;
