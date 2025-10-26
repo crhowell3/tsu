@@ -1,11 +1,11 @@
 use clap::Parser;
 use crossterm::{ExecutableCommand, terminal};
 use std::{env, io::stdout, panic};
+use tsu_editor::theme::{Theme, ThemeLoader};
 
 use tsu_editor::buffer::Buffer;
 use tsu_editor::config::Config;
 use tsu_editor::editor::Editor;
-use tsu_editor::theme::parse_vscode_theme;
 use tsu_editor::{LOGGER, Logger, VERSION_AND_GIT_HASH};
 
 #[derive(Parser, Debug)]
@@ -76,12 +76,8 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let theme_file = &Config::path("themes").join(&config.theme);
-    if !theme_file.exists() {
-        eprintln!("Theme file {} not found", config.theme);
-        std::process::exit(1);
-    }
-    let theme = parse_vscode_theme(&theme_file.to_string_lossy())?;
+    let theme_loader = ThemeLoader::new(&[Config::path("")]);
+    let theme = theme_loader.load(&config.theme)?;
 
     let mut editor = Editor::new(config, theme, buffers)?;
 

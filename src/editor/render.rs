@@ -79,8 +79,7 @@ impl Editor {
                 b: 100,
             }),
             bg: None,
-            bold: false,
-            italic: false,
+            ..Default::default()
         };
 
         let x = window.position.x + window.size.0;
@@ -101,8 +100,7 @@ impl Editor {
                 b: 100,
             }),
             bg: None,
-            bold: false,
-            italic: false,
+            ..Default::default()
         };
 
         let (term_width, term_height) = (self.size.0 as usize, self.size.1 as usize);
@@ -338,44 +336,44 @@ impl Editor {
 
             self.stdout.queue(cursor::MoveTo(x as u16, y as u16))?;
 
-            if let Some(background) = cell.style.background {
+            if let Some(background) = cell.style.bg {
                 let background = blend_color(
                     background,
                     self.theme
-                        .style
-                        .background
+                        .get("ui.background")
+                        .bg
                         .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
                 );
                 self.stdout
                     .queue(style::SetBackgroundColor(background.into()))?;
             } else {
                 self.stdout.queue(style::SetBackgroundColor(
-                    self.theme.style.background.unwrap().into(),
+                    self.theme.get("ui.background").bg.unwrap().into(),
                 ))?;
             }
 
-            if let Some(foreground) = cell.style.foreground {
+            if let Some(foreground) = cell.style.fg {
                 let foreground = blend_color(
                     foreground,
                     self.theme
-                        .style
-                        .background
+                        .get("")
+                        .bg
                         .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
                 );
                 self.stdout
                     .queue(style::SetForegroundColor(foreground.into()))?;
             } else {
                 self.stdout.queue(style::SetForegroundColor(
-                    self.theme.style.foreground.unwrap().into(),
+                    self.theme.get("ui.text").fg.unwrap().into(),
                 ))?;
             }
-            if cell.style.italic {
-                self.stdout
-                    .queue(style::SetAttribute(style::Attribute::Italic))?;
-            } else {
-                self.stdout
-                    .queue(style::SetAttribute(style::Attribute::NoItalic))?;
-            }
+            // if cell.style.italic {
+            //     self.stdout
+            //         .queue(style::SetAttribute(style::Attribute::Italic))?;
+            // } else {
+            //     self.stdout
+            //         .queue(style::SetAttribute(style::Attribute::NoItalic))?;
+            // }
             self.stdout.queue(style::Print(cell.c))?;
         }
 
@@ -394,10 +392,7 @@ impl Editor {
         window: &crate::window::Window,
     ) {
         let width = self.gutter_width();
-        let gutter_style = self
-            .theme
-            .gutter_style
-            .fallback_background(&self.theme.styles);
+        let gutter_style = self.theme.get("ui.linenr");
 
         let window_buffer = &self.buffers[window.buffer_index];
 
@@ -443,7 +438,7 @@ impl Editor {
         }
 
         let style_info = self.highlight(&viewport_content)?;
-        let theme_style = self.theme.style.clone();
+        let theme_style = self.theme.get("ui.text");
 
         let gutter_width = self.gutter_width();
         let mut x = gutter_width + 1;
@@ -479,7 +474,7 @@ impl Editor {
             }
 
             let style = determine_style_for_position(&style_info, position)
-                .unwrap_or(self.theme.style.clone());
+                .unwrap_or(self.theme.get("ui.text"));
 
             let terminal_x = self.window_to_terminal_x(window, x);
             let terminal_y = self.window_to_terminal_y(window, y);
@@ -589,31 +584,26 @@ impl Editor {
         let y = self.size.1 as usize - 2;
 
         let transition_style = Style {
-            foreground: self.theme.status_line_style.outer_style.background,
-            background: self.theme.status_line_style.inner_style.background,
+            fg: self.theme.get("ui.statusline").bg,
+            bg: self.theme.get("ui.statusline").bg,
             ..Default::default()
         };
 
-        buffer.set_text(0, y, &mode, &self.theme.status_line_style.outer_style);
+        buffer.set_text(0, y, &mode, &self.theme.get("ui.statusline"));
 
-        buffer.set_text(
-            mode.len(),
-            y,
-            &self.theme.status_line_style.outer_chars[1].to_string(),
-            &transition_style,
-        );
+        buffer.set_text(mode.len(), y, "", &transition_style);
 
         buffer.set_text(
             mode.len() + 1,
             y,
             &format!("{:<width$}", file, width = file_width as usize),
-            &self.theme.status_line_style.inner_style,
+            &self.theme.get("ui.statusline"),
         );
 
         buffer.set_text(
             mode.len() + 1 + file_width as usize,
             y,
-            &self.theme.status_line_style.outer_chars[2].to_string(),
+            "",
             &transition_style,
         );
 
@@ -621,12 +611,12 @@ impl Editor {
             mode.len() + 2 + file_width as usize,
             y,
             &format!("{position}{window_indicator}"),
-            &self.theme.status_line_style.outer_style,
+            &self.theme.get("ui.statusline"),
         );
     }
 
     fn draw_command_line(&mut self, buffer: &mut RenderBuffer) {
-        let style = &self.theme.style;
+        let style = &self.theme.get("");
         let y = self.size.1 as usize - 1;
 
         if !self.is_command() {

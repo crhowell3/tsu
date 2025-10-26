@@ -1,6 +1,7 @@
 use crate::{
     color::{Color, blend_color},
-    theme::{Style, Theme},
+    graphics::Style,
+    theme::Theme,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,13 +121,10 @@ impl RenderBuffer {
             return;
         }
 
-        let background = style.background.map(|color| match color {
+        let bg = style.bg.map(|color| match color {
             Color::Rgba { r, g, b, a } => blend_color(
                 Color::Rgba { r, g, b, a },
-                theme
-                    .style
-                    .background
-                    .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
+                theme.get("").bg.unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
             ),
             _ => color,
         });
@@ -134,10 +132,9 @@ impl RenderBuffer {
         self.cells[position] = Cell {
             c,
             style: Style {
-                foreground: style.foreground,
-                background,
-                bold: style.bold,
-                italic: style.italic,
+                fg: style.fg,
+                bg,
+                ..Default::default()
             },
         };
     }

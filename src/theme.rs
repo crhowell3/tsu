@@ -1,12 +1,235 @@
-use std::{collections::HashMap, string};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
+use once_cell::sync::Lazy;
 use toml::{Value, map::Map};
 
 use crate::{
     color::{Color, parse_rgb},
     graphics::{Modifier, Style, UnderlineStyle},
     hashmap,
+    highlighter::Highlight,
 };
+
+pub static DEFAULT_THEME_DATA: Lazy<Value> = Lazy::new(|| {
+    let bytes = include_bytes!("../theme.toml");
+    toml::from_str(str::from_utf8(bytes).unwrap()).expect("Failed to parse base default theme")
+});
+
+pub static BASE16_DEFAULT_THEME_DATA: Lazy<Value> = Lazy::new(|| {
+    let bytes = include_bytes!("../base16_theme.toml");
+    toml::from_str(str::from_utf8(bytes).unwrap()).expect("Failed to parse base 16 default theme")
+});
+
+pub static DEFAULT_THEME: Lazy<Theme> = Lazy::new(|| Theme {
+    name: "default".into(),
+    ..Theme::from(DEFAULT_THEME_DATA.clone())
+});
+
+pub static BASE16_DEFAULT_THEME: Lazy<Theme> = Lazy::new(|| Theme {
+    name: "base16_default".into(),
+    ..Theme::from(BASE16_DEFAULT_THEME_DATA.clone())
+});
+
+pub fn merge_toml_values(left: toml::Value, right: toml::Value, merge_depth: usize) -> toml::Value {
+    use toml::Value;
+
+    fn get_name(v: &Value) -> Option<&str> {
+        v.get("name").and_then(Value::as_str)
+    }
+
+    match (left, right) {
+        (Value::Array(mut left_items), Value::Array(right_items)) => {
+            if merge_depth > 0 {
+                left_items.reserve(right_items.len());
+                for rvalue in right_items {
+                    let lvalue = get_name(&rvalue)
+                        .and_then(|rname| {
+                            left_items.iter().position(|v| get_name(v) == Some(rname))
+                        })
+                        .map(|lpos| left_items.remove(lpos));
+                    let mvalue = match lvalue {
+                        Some(lvalue) => merge_toml_values(lvalue, rvalue, merge_depth - 1),
+                        None => rvalue,
+                    };
+                    left_items.push(mvalue);
+                }
+                Value::Array(left_items)
+            } else {
+                Value::Array(right_items)
+            }
+        }
+        (Value::Table(mut left_map), Value::Table(right_map)) => {
+            if merge_depth > 0 {
+                for (rname, rvalue) in right_map {
+                    match left_map.remove(&rname) {
+                        Some(lvalue) => {
+                            let merged_value = merge_toml_values(lvalue, rvalue, merge_depth - 1);
+                            left_map.insert(rname, merged_value);
+                        }
+                        None => {
+                            left_map.insert(rname, rvalue);
+                        }
+                    }
+                }
+                Value::Table(left_map)
+            } else {
+                Value::Table(right_map)
+            }
+        }
+        // Catch everything else we didn't handle, and use the right value
+        (_, value) => value,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ThemeLoader {
+    theme_dirs: Vec<PathBuf>,
+}
+
+impl ThemeLoader {
+    pub fn new(dirs: &[PathBuf]) -> Self {
+        Self {
+            theme_dirs: dirs.iter().map(|p| p.join("themes")).collect(),
+        }
+    }
+
+    pub fn load(&self, name: &str) -> anyhow::Result<Theme> {
+        let (theme, warnings) = self.load_with_warnings(name)?;
+
+        for warning in warnings {
+            crate::warn!("Theme '{name}': {warning}");
+        }
+
+        Ok(theme)
+    }
+
+    pub fn load_with_warnings(&self, name: &str) -> anyhow::Result<(Theme, Vec<String>)> {
+        if name == "default" {
+            return Ok((self.default(), Vec::new()));
+        }
+        if name == "base16_default" {
+            return Ok((self.base16_default(), Vec::new()));
+        }
+
+        let mut visited_paths = HashSet::new();
+        let (theme, warnings) = self
+            .load_theme(name, &mut visited_paths)
+            .map(Theme::from_toml)?;
+
+        let theme = Theme {
+            name: name.into(),
+            ..theme
+        };
+
+        Ok((theme, warnings))
+    }
+
+    fn load_theme(
+        &self,
+        name: &str,
+        visited_paths: &mut HashSet<PathBuf>,
+    ) -> anyhow::Result<Value> {
+        let path = self.path(name, visited_paths)?;
+
+        let theme_toml = self.load_toml(path)?;
+
+        let inherits = theme_toml.get("inherits");
+
+        let theme_toml = if let Some(parent_theme_name) = inherits {
+            let parent_theme_name = parent_theme_name.as_str().ok_or_else(|| {
+                anyhow::anyhow!("Expected 'inherits' to be a string: {parent_theme_name}")
+            })?;
+
+            let parent_theme_toml = match parent_theme_name {
+                "default" => DEFAULT_THEME_DATA.clone(),
+                "base16_default" => BASE16_DEFAULT_THEME_DATA.clone(),
+                _ => self.load_theme(parent_theme_name, visited_paths)?,
+            };
+
+            self.merge_themes(parent_theme_toml, theme_toml)
+        } else {
+            theme_toml
+        };
+
+        Ok(theme_toml)
+    }
+
+    fn merge_themes(&self, parent_theme_toml: Value, theme_toml: Value) -> Value {
+        let parent_palette = parent_theme_toml.get("palette");
+        let palette = theme_toml.get("palette");
+
+        let palette_values = match (parent_palette, palette) {
+            (Some(parent_palette), Some(palette)) => {
+                merge_toml_values(parent_palette.clone(), palette.clone(), 2)
+            }
+            (Some(parent_palette), None) => parent_palette.clone(),
+            (None, Some(palette)) => palette.clone(),
+            (None, None) => Map::new().into(),
+        };
+
+        let mut palette = Map::new();
+        palette.insert(String::from("palette"), palette_values);
+
+        let theme = merge_toml_values(parent_theme_toml, theme_toml, 1);
+        merge_toml_values(theme, palette.into(), 1)
+    }
+
+    fn load_toml(&self, path: PathBuf) -> anyhow::Result<Value> {
+        let data = std::fs::read_to_string(path)?;
+        let value = toml::from_str(&data)?;
+
+        Ok(value)
+    }
+
+    fn path(&self, name: &str, visited_paths: &mut HashSet<PathBuf>) -> anyhow::Result<PathBuf> {
+        let filename = format!("{}.toml", name);
+
+        let mut cycle_found = false; // track if there was a path, but it was in a cycle
+        self.theme_dirs
+            .iter()
+            .find_map(|dir| {
+                let path = dir.join(&filename);
+                if !path.exists() {
+                    None
+                } else if visited_paths.contains(&path) {
+                    // Avoiding cycle, continuing to look in lower priority directories
+                    cycle_found = true;
+                    None
+                } else {
+                    visited_paths.insert(path.clone());
+                    Some(path)
+                }
+            })
+            .ok_or_else(|| {
+                if cycle_found {
+                    anyhow::anyhow!("Cycle found in inheriting: {}", name)
+                } else {
+                    anyhow::anyhow!("File not found for: {}", name)
+                }
+            })
+    }
+
+    pub fn default_theme(&self, true_color: bool) -> Theme {
+        if true_color {
+            self.default()
+        } else {
+            self.base16_default()
+        }
+    }
+
+    /// Returns the default theme
+    pub fn default(&self) -> Theme {
+        DEFAULT_THEME.clone()
+    }
+
+    /// Returns the alternative 16-color default theme
+    pub fn base16_default(&self) -> Theme {
+        BASE16_DEFAULT_THEME.clone()
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct Theme {
