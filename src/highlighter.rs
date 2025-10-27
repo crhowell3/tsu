@@ -1,7 +1,43 @@
+use std::num::NonZeroU32;
+
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 use tree_sitter_rust::HIGHLIGHTS_QUERY;
 
 use crate::{editor::StyleInfo, theme::Theme};
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Highlight(NonZeroU32);
+
+impl Highlight {
+    pub const MAX: u32 = u32::MAX - 1;
+
+    #[must_use]
+    /// Construct a new `Highlight` with an index
+    ///
+    /// # Arguments
+    /// - `inner`: A self-managed index
+    ///
+    /// # Returns
+    /// - A constructed `Highlight`
+    ///
+    /// # Panics
+    /// This function may panic if the assertion that inner does not equal the maximum value of an
+    /// unsigned 32-bit integer fails
+    pub const fn new(inner: u32) -> Self {
+        assert!(inner != u32::MAX);
+        Self(NonZeroU32::new(inner ^ u32::MAX).unwrap())
+    }
+
+    #[must_use]
+    pub const fn get(&self) -> u32 {
+        self.0.get() ^ u32::MAX
+    }
+
+    #[must_use]
+    pub const fn idx(&self) -> usize {
+        self.get() as usize
+    }
+}
 
 /// Contains the data and logic for performing syntax highlighting when opening certain file types
 pub struct Highlighter {
@@ -71,11 +107,9 @@ impl Highlighter {
                 let start = node.start_byte();
                 let end = node.end_byte();
                 let scope = self.query.capture_names()[cap.index as usize];
-                let style = self.theme.get_style(scope);
+                let style = self.theme.get(scope);
 
-                if let Some(style) = style {
-                    colors.push(StyleInfo { start, end, style });
-                }
+                colors.push(StyleInfo { start, end, style });
             }
         }
 

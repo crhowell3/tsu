@@ -1,4 +1,4 @@
-theme = "gruvbox-dark-soft.json"
+theme = "gruvbox"
 
 log_file = "/tmp/tsu.log"
 

@@ -1,6 +1,7 @@
 use crate::{
     color::{Color, blend_color},
-    theme::{Style, Theme},
+    graphics::Style,
+    theme::Theme,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,7 +40,7 @@ impl RenderBuffer {
         let cells = vec![
             Cell {
                 c: ' ',
-                style: default_style.clone(),
+                style: *default_style,
             };
             width * height
         ];
@@ -72,15 +73,12 @@ impl RenderBuffer {
 
         for line in contents {
             for c in line.chars() {
-                cells.push(Cell {
-                    c,
-                    style: style.clone(),
-                });
+                cells.push(Cell { c, style: *style });
             }
             for _ in 0..width.saturating_sub(line.len()) {
                 cells.push(Cell {
                     c: ' ',
-                    style: style.clone(),
+                    style: *style,
                 });
             }
         }
@@ -120,24 +118,20 @@ impl RenderBuffer {
             return;
         }
 
-        let background = style.background.map(|color| match color {
+        let bg = style.bg.map(|color| match color {
             Color::Rgba { r, g, b, a } => blend_color(
                 Color::Rgba { r, g, b, a },
-                theme
-                    .style
-                    .background
-                    .unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
+                theme.get("").bg.unwrap_or(Color::Rgb { r: 0, g: 0, b: 0 }),
             ),
-            Color::Rgb { .. } => color,
+            _ => color,
         });
 
         self.cells[position] = Cell {
             c,
             style: Style {
-                foreground: style.foreground,
-                background,
-                bold: style.bold,
-                italic: style.italic,
+                fg: style.fg,
+                bg,
+                ..Default::default()
             },
         };
     }
@@ -158,10 +152,7 @@ impl RenderBuffer {
             if pos + i >= self.cells.len() {
                 break;
             }
-            self.cells[pos + i] = Cell {
-                c,
-                style: style.clone(),
-            }
+            self.cells[pos + i] = Cell { c, style: *style }
         }
     }
 
