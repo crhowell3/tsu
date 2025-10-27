@@ -1,11 +1,11 @@
-"tag" = { fg = "tag" }
+# Author: Shafkath Shuhan <shafkathshuhannyc@gmail.com>
 
 "namespace" = { fg = "type" }
 "module" = { fg = "type" }
 
 "type" = { fg = "type" }
 "type.builtin" = { fg = "#66D9EF" }
-"type.enum.variant" = { fg = "text" }
+"type.enum.variant" = { fg = "text" } 
 "constructor" = { fg = "fn_declaration" }
 "variable.other.member" = { fg = "variable" }
 
@@ -79,7 +79,7 @@
 "ui.statusline" = { fg = "active_text", bg = "#414339" }
 "ui.statusline.inactive" = { fg = "active_text", bg = "#75715e" }
 
-# "ui.bufferline" = { fg = "grey2", bg = "bg3" }
+"ui.bufferline" = { fg = "grey2", bg = "bg3" }
 "ui.bufferline.active" = { fg = "active_text", bg = "selection", modifiers = [
   "bold",
 ] }
@@ -115,4 +115,3 @@ cursor = "#a6a6a6"
 inactive_cursor = "#878b91"
 widget = "#1e1f1c"
 selection = "#414339"
-tag = "#F92672"

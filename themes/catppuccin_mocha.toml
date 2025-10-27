@@ -1,3 +1,5 @@
+# Syntax highlighting
+# -------------------
 "attribute" = "yellow"
 
 "type" = "yellow"
@@ -19,7 +21,7 @@
 "variable" = "text"
 "variable.parameter" = { fg = "maroon", modifiers = ["italic"] }
 "variable.builtin" = "red"
-"variable.other.member" = "blue"
+"variable.other.member" = "teal"
 
 "label" = "sapphire" # used for lifetimes
 
@@ -40,22 +42,19 @@
 
 "special" = "blue" # fuzzy highlight
 
-"markup.heading.1" = "red"
-"markup.heading.2" = "peach"
-"markup.heading.3" = "yellow"
-"markup.heading.4" = "green"
-"markup.heading.5" = "sapphire"
-"markup.heading.6" = "lavender"
-"markup.list" = "teal"
-"markup.list.unchecked" = "overlay2"
-"markup.list.checked" = "green"
-"markup.bold" = { fg = "red", modifiers = ["bold"] }
-"markup.italic" = { fg = "red", modifiers = ["italic"] }
+"markup.heading.marker" = { fg = "peach", modifiers = ["bold"] }
+"markup.heading.1" = "lavender"
+"markup.heading.2" = "mauve"
+"markup.heading.3" = "green"
+"markup.heading.4" = "yellow"
+"markup.heading.5" = "pink"
+"markup.heading.6" = "teal"
+"markup.list" = "mauve"
+"markup.bold" = { modifiers = ["bold"] }
+"markup.italic" = { modifiers = ["italic"] }
 "markup.link.url" = { fg = "blue", modifiers = ["italic", "underlined"] }
-"markup.link.text" = "lavender"
-"markup.link.label" = "sapphire"
-"markup.raw" = "green"
-"markup.quote" = "pink"
+"markup.link.text" = "blue"
+"markup.raw" = "flamingo"
 
 "diff.plus" = "green"
 "diff.minus" = "red"
@@ -70,9 +69,9 @@
 
 "ui.statusline" = { fg = "subtext1", bg = "mantle" }
 "ui.statusline.inactive" = { fg = "surface2", bg = "mantle" }
-"ui.statusline.normal" = { fg = "base", bg = "rosewater", modifiers = ["bold"] }
-"ui.statusline.insert" = { fg = "base", bg = "green", modifiers = ["bold"] }
-"ui.statusline.select" = { fg = "base", bg = "lavender", modifiers = ["bold"] }
+"ui.statusline.normal" = { fg = "base", bg = "lavender", modifiers = ["bold"] }
+"ui.statusline.insert" = { fg = "base", bg = "green", modifiers = ["bold"]  }
+"ui.statusline.select" = { fg = "base", bg = "flamingo", modifiers = ["bold"]  }
 
 "ui.popup" = { fg = "text", bg = "surface0" }
 "ui.window" = { fg = "crust" }
@@ -85,7 +84,6 @@
 "ui.text" = "text"
 "ui.text.focus" = { fg = "text", bg = "surface0", modifiers = ["bold"] }
 "ui.text.inactive" = { fg = "overlay1" }
-"ui.text.directory" = { fg = "blue" }
 
 "ui.virtual" = "overlay0"
 "ui.virtual.ruler" = { bg = "surface0" }
@@ -99,13 +97,13 @@
 "ui.cursor.primary" = { fg = "base", bg = "rosewater" }
 "ui.cursor.match" = { fg = "peach", modifiers = ["bold"] }
 
-"ui.cursor.primary.normal" = { fg = "base", bg = "rosewater" }
+"ui.cursor.primary.normal" = { fg = "base", bg = "lavender" }
 "ui.cursor.primary.insert" = { fg = "base", bg = "green" }
-"ui.cursor.primary.select" = { fg = "base", bg = "lavender" }
+"ui.cursor.primary.select" = { fg = "base", bg = "flamingo" }
 
 "ui.cursor.normal" = { fg = "base", bg = "secondary_cursor_normal" }
 "ui.cursor.insert" = { fg = "base", bg = "secondary_cursor_insert" }
-"ui.cursor.select" = { fg = "base", bg = "secondary_cursor_select" }
+"ui.cursor.select" = { fg = "base", bg = "secondary_cursor" }
 
 "ui.cursorline.primary" = { bg = "cursorline" }
 
@@ -118,14 +116,11 @@
 "diagnostic.warning" = { underline = { color = "yellow", style = "curl" } }
 "diagnostic.info" = { underline = { color = "sky", style = "curl" } }
 "diagnostic.hint" = { underline = { color = "teal", style = "curl" } }
-"diagnostic.unnecessary" = { modifiers = ["dim"] }
 
 error = "red"
 warning = "yellow"
 info = "sky"
 hint = "teal"
-
-rainbow = ["red", "peach", "yellow", "green", "sapphire", "lavender"]
 
 [palette]
 rosewater = "#f5e0dc"
@@ -157,6 +152,5 @@ crust = "#11111b"
 
 cursorline = "#2a2b3c"
 secondary_cursor = "#b5a6a8"
-secondary_cursor_select = "#878ec0"
-secondary_cursor_normal = "#b5a6a8"
+secondary_cursor_normal = "#878ec0"
 secondary_cursor_insert = "#7ea87f"

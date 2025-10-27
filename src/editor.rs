@@ -27,7 +27,7 @@ use crate::{
     graphics::Style,
     highlighter::Highlighter,
     log,
-    theme::Theme,
+    theme::{Theme, ThemeLoader},
     unicode::{self, byte_to_char, char_to_byte, next_grapheme_boundary, prev_grapheme_boundary},
     window_manager::WindowManager,
 };
@@ -485,7 +485,7 @@ impl Editor {
             return vec![Action::GoToLine(line)];
         }
 
-        let commands = &["quit", "write"];
+        let commands = &["quit", "write", "theme"];
 
         let parsed = command::parse(commands, cmd);
 
@@ -505,6 +505,19 @@ impl Editor {
                     actions.push(Action::SaveAs(file.clone()));
                 } else {
                     actions.push(Action::Save);
+                }
+            }
+
+            if cmd == "theme" {
+                let theme_loader = ThemeLoader::new(&[Config::path("")]);
+                if let Some(theme_name) = parsed.args.first() {
+                    if let Ok(theme) = theme_loader.load(theme_name) {
+                        self.theme = theme;
+                    } else {
+                        self.last_error = Some(format!("Could not load theme '{theme_name}'"));
+                    }
+                } else {
+                    self.last_error = Some(format!("Current theme: {}", self.theme.name()));
                 }
             }
         }
