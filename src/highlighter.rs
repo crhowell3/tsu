@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 use tree_sitter_rust::HIGHLIGHTS_QUERY;
 
+use crate::unicode::byte_to_char;
 use crate::{editor::StyleInfo, theme::Theme};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -104,8 +105,10 @@ impl Highlighter {
         while let Some(mat) = matches.next() {
             for cap in mat.captures {
                 let node = cap.node;
-                let start = node.start_byte();
-                let end = node.end_byte();
+                let start_byte = node.start_byte();
+                let end_byte = node.end_byte();
+                let start = byte_to_char(code, start_byte);
+                let end = byte_to_char(code, end_byte);
                 let scope = self.query.capture_names()[cap.index as usize];
                 let style = self.theme.get(scope);
 
