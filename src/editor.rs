@@ -511,8 +511,12 @@ impl Editor {
             if cmd == "theme" {
                 let theme_loader = ThemeLoader::new(&[Config::path("")]);
                 if let Some(theme_name) = parsed.args.first() {
-                    if let Ok(theme) = theme_loader.load(theme_name) {
-                        self.theme = theme;
+                    if let Ok(new_theme) = theme_loader.load(theme_name) {
+                        self.theme = new_theme.clone();
+                        if let Ok(new_highlighter) = Highlighter::new(&new_theme) {
+                            self.highlighter = new_highlighter;
+                            actions.push(Action::Redraw);
+                        }
                     } else {
                         self.last_error = Some(format!("Could not load theme '{theme_name}'"));
                     }
@@ -660,6 +664,15 @@ impl Editor {
         self.last_error = None;
 
         match action {
+            Action::Redraw => {
+                // Clear the screen
+                self.stdout
+                    .execute(terminal::Clear(terminal::ClearType::All))?;
+                // Reset and clear the render buffer
+                buffer.clear();
+                // Re-render everything
+                self.render(buffer)?;
+            }
             Action::Quit(force) => {
                 if *force {
                     return Ok(true);
