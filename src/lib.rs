@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 pub mod action;
 pub mod buffer;
 pub mod color;
@@ -7,10 +9,12 @@ pub mod editor;
 pub mod graphics;
 pub mod highlighter;
 pub mod logger;
+pub mod lsp;
 pub mod theme;
 pub mod unicode;
 pub mod window;
 pub mod window_manager;
+pub mod workspace;
 
 #[doc(hidden)]
 pub mod ext;
