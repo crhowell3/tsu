@@ -92,4 +92,6 @@ pub enum Action {
     EnterMode(Mode),
     /// Store the first key in a multi-character command sequence
     SetWaitingKey(Box<KeyAction>),
+    /// Force a complete redraw of the editor
+    Redraw,
 }
