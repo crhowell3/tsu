@@ -27,6 +27,11 @@ use crate::{
     graphics::Style,
     highlighter::Highlighter,
     log,
+    lsp::{
+        CompletionResponse, Diagnostic, InboundMessage, LspClient, ParsedNotification,
+        ProgressParams, ProgressToken, ResponseMessage, ServerCapabilities,
+        get_client_capabilities,
+    },
     theme::{Theme, ThemeLoader},
     unicode::{self, byte_to_char, char_to_byte, next_grapheme_boundary, prev_grapheme_boundary},
     window_manager::WindowManager,
@@ -107,6 +112,7 @@ pub struct Editor {
     mode: Mode,
     waiting_command: Option<String>,
     command: String,
+    diagnostics: HashMap<String, Vec<Diagnostic>>,
     waiting_key_action: Option<KeyAction>,
     undoable_actions: Vec<Action>,
     insert_undo_actions: Vec<Action>,
@@ -161,6 +167,7 @@ impl Editor {
             mode: Mode::Normal,
             size,
             command: String::new(),
+            diagnostics: HashMap::new(),
             waiting_command: None,
             waiting_key_action: None,
             undoable_actions: vec![],
@@ -460,6 +467,148 @@ impl Editor {
         Ok(quit)
     }
 
+    fn add_diagnostics(&mut self, uri: Option<&str>, diagnostics: &[Diagnostic]) -> Option<Action> {
+        let Some(uri) = uri else {
+            crate::warn!("No uri provided for diagnostics: {diagnostics:?}");
+            return None;
+        };
+
+        crate::info!("Adding diagnostics for {uri}: {diagnostics:#?}");
+        self.diagnostics
+            .insert(uri.to_string(), diagnostics.to_vec());
+
+        Some(Action::Redraw)
+    }
+
+    fn handle_lsp_message(
+        &mut self,
+        msg: &InboundMessage,
+        method: Option<String>,
+    ) -> Option<Action> {
+        fn parse_diagnostics(msg: &ResponseMessage) -> Option<(String, Vec<Diagnostic>)> {
+            let req = msg.request.as_ref()?;
+            let params = req.params.as_object()?;
+            let text_document = params.get("textDocument")?.as_object()?;
+            let uri = text_document.get("uri")?.as_str()?;
+            let diagnostics = msg.result.as_object()?.get("items")?.as_array()?;
+
+            Some((
+                uri.to_string(),
+                diagnostics
+                    .iter()
+                    .filter_map(|d| serde_json::from_value::<Diagnostic>(d.clone()).ok())
+                    .collect::<Vec<_>>(),
+            ))
+        }
+
+        match msg {
+            InboundMessage::Message(msg) => {
+                if let Some(ref method) = method {
+                    if method == "initialize" {
+                        // self.server_capabilities = self.lsp.get_server_capabilities().cloned();
+                        // log!("server capabilities: {:#?}", self.server_capabilities);
+                    }
+
+                    if method == "rust-analyzer/analyzerStatus" {
+                        let r = msg.result.as_str().unwrap();
+                        log!("analyzer status: {r}");
+                    }
+
+                    if method == "rust-analyzer/viewFileText" {
+                        let r = msg.result.as_str().unwrap();
+                        log!("----");
+                        log!("{r}");
+                        log!("----");
+                    }
+
+                    if method == "textDocument/diagnostic" {
+                        if let Some((uri, diagnostics)) = parse_diagnostics(msg) {
+                            return self.add_diagnostics(Some(&uri), &diagnostics);
+                        }
+                    }
+
+                    if method == "textDocument/completion" {
+                        if msg.result.is_null() {
+                            // TODO: retry?
+                            return None;
+                        }
+
+                        match serde_json::from_value::<CompletionResponse>(msg.result.clone()) {
+                            Ok(completion_response) => {
+                                self.completion_ui.show(
+                                    completion_response.items,
+                                    self.cursor_x,
+                                    self.cursor_y,
+                                );
+                                self.current_dialog = Some(Box::new(self.completion_ui.clone()));
+                                return Some(Action::ShowDialog);
+                            }
+                            Err(err) => {
+                                log!("ERROR: error parsing completion response: {err}");
+                            }
+                        }
+                    }
+
+                    if method == "textDocument/definition" {
+                        let result = match msg.result {
+                            serde_json::Value::Array(ref arr) => arr[0].as_object().unwrap(),
+                            serde_json::Value::Object(ref obj) => obj,
+                            _ => return None,
+                        };
+
+                        return self.go_to_definition(result);
+                    }
+
+                    if method == "textDocument/hover" {
+                        log!("hover response: {msg:?}");
+                        let result = match msg.result {
+                            serde_json::Value::Array(ref arr) => arr[0].as_object().unwrap(),
+                            serde_json::Value::Object(ref obj) => obj,
+                            _ => return None,
+                        };
+
+                        if let Some(contents) = result.get("contents") {
+                            if let Some(contents) = contents.as_object() {
+                                if let Some(serde_json::Value::String(value)) =
+                                    contents.get("value")
+                                {
+                                    let info = Info::new(self, value.clone());
+                                    self.current_dialog = Some(Box::new(info));
+                                    return Some(Action::ShowDialog);
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            InboundMessage::Notification(msg) => match msg {
+                ParsedNotification::PublishDiagnostics(msg) => {
+                    self.add_diagnostics(msg.uri.as_deref(), &msg.diagnostics)
+                }
+                ParsedNotification::Progress(progress_params) => {
+                    self.process_progress(progress_params);
+                    Some(Action::NotifyPlugins(
+                        "lsp:progress".to_string(),
+                        serde_json::to_value(progress_params).unwrap_or(serde_json::Value::Null),
+                    ))
+                }
+            },
+            InboundMessage::UnknownNotification(msg) => {
+                log!("got an unhandled notification: {msg:#?}");
+                None
+            }
+            InboundMessage::Error(error_msg) => {
+                log!("got an error: {error_msg:?}");
+                None
+            }
+            InboundMessage::ProcessingError(error_msg) => {
+                self.last_error = Some(error_msg.to_string());
+                None
+            }
+        }
+    }
+
     fn handle_event(&mut self, ev: &event::Event) -> Option<KeyAction> {
         if let Some(key_action) = self.waiting_key_action.take() {
             self.waiting_command = None;
@@ -665,12 +814,6 @@ impl Editor {
 
         match action {
             Action::Redraw => {
-                // Clear the screen
-                self.stdout
-                    .execute(terminal::Clear(terminal::ClearType::All))?;
-                // Reset and clear the render buffer
-                buffer.clear();
-                // Re-render everything
                 self.render(buffer)?;
             }
             Action::Quit(force) => {

@@ -6,7 +6,7 @@ use std::{
 };
 
 use path_absolutize::*;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use similar::{Algorithm, DiffOp, TextDiff};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
@@ -14,9 +14,9 @@ use tokio::{
     sync::mpsc::{self, error::TryRecvError},
 };
 
-use super::{get_client_capabilities, InboundMessage, LspClient, OutboundMessage, ResponseError};
+use super::{InboundMessage, LspClient, OutboundMessage, ResponseError, get_client_capabilities};
 use crate::lsp::{
-    parse_notification, types::*, Notification, NotificationRequest, Request, ResponseMessage,
+    Notification, NotificationRequest, Request, ResponseMessage, parse_notification, types::*,
 };
 use crate::{log, lsp::LspError, workspace::get_workspace_uri};
 
@@ -575,53 +575,53 @@ impl LspClient for RealLspClient {
 
         match self.response_rx.try_recv() {
             Ok(mut msg) => {
-                if let InboundMessage::Message(msg) = &mut msg {
-                    if let Some(req) = self.pending_responses.remove(&msg.id) {
-                        log!("[lsp] rcv_response: id={} method={}", msg.id, req.method);
-                        if req.method == "initialize" {
-                            log!("[lsp] server initialized");
+                if let InboundMessage::Message(msg) = &mut msg
+                    && let Some(req) = self.pending_responses.remove(&msg.id)
+                {
+                    log!("[lsp] rcv_response: id={} method={}", msg.id, req.method);
+                    if req.method == "initialize" {
+                        log!("[lsp] server initialized");
 
-                            // Parse the initialize result
-                            // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
-                            let init_result: InitializeResult =
-                                serde_json::from_value(msg.result.clone())
-                                    .map_err(LspError::JsonError)?;
+                        // Parse the initialize result
+                        // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
+                        let init_result: InitializeResult =
+                            serde_json::from_value(msg.result.clone())
+                                .map_err(LspError::JsonError)?;
 
-                            // log!("[lsp] server capabilities: {:#?}", init_result.capabilities);
-                            self.server_capabilities = Some(init_result.capabilities);
+                        // log!("[lsp] server capabilities: {:#?}", init_result.capabilities);
+                        self.server_capabilities = Some(init_result.capabilities);
 
-                            if let Some(server_info) = &init_result.server_info {
-                                log!(
-                                    "[lsp] server info: {} {}",
-                                    server_info.name,
-                                    server_info.version.as_deref().unwrap_or("unknown version")
-                                );
-                            }
-
-                            self.send_notification("initialized", json!({}), true)
-                                .await?;
-                            // self.send_notification(
-                            //     "$/setTrace",
-                            //     json!({ "value": "verbose" }),
-                            //     true,
-                            // )
-                            // .await?;
-                            self.initialized = true;
-
+                        if let Some(server_info) = &init_result.server_info {
                             log!(
-                                "[lsp] sending {} pending messages",
-                                self.pending_messages.len()
+                                "[lsp] server info: {} {}",
+                                server_info.name,
+                                server_info.version.as_deref().unwrap_or("unknown version")
                             );
-                            for msg in self.pending_messages.drain(..) {
-                                self.request_tx.send(msg).await?;
-                            }
                         }
 
-                        let method = req.method.clone();
-                        msg.request = Some(req);
+                        self.send_notification("initialized", json!({}), true)
+                            .await?;
+                        // self.send_notification(
+                        //     "$/setTrace",
+                        //     json!({ "value": "verbose" }),
+                        //     true,
+                        // )
+                        // .await?;
+                        self.initialized = true;
 
-                        return Ok(Some((InboundMessage::Message(msg.clone()), Some(method))));
+                        log!(
+                            "[lsp] sending {} pending messages",
+                            self.pending_messages.len()
+                        );
+                        for msg in self.pending_messages.drain(..) {
+                            self.request_tx.send(msg).await?;
+                        }
                     }
+
+                    let method = req.method.clone();
+                    msg.request = Some(req);
+
+                    return Ok(Some((InboundMessage::Message(msg.clone()), Some(method))));
                 }
                 Ok(Some((msg, None)))
             }
